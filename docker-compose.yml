@@ -1,0 +1,29 @@
+name: newsletter
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: newsletter
+      POSTGRES_PASSWORD: newsletter
+      POSTGRES_DB: newsletter
+    ports:
+      # 5432 is often taken by other local Postgres instances
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsletter"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  mailpit:
+    # Catches all outgoing email in dev. Web inbox: http://localhost:8025
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP
+      - "127.0.0.1:8025:8025" # Web UI
+
+volumes:
+  pgdata:
