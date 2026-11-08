@@ -46,7 +46,7 @@ async function Dashboard() {
         status: posts.status,
         publishedAt: posts.publishedAt,
         updatedAt: posts.updatedAt,
-        delivered: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = ${posts.id} and d.status = 'sent')`,
+        delivered: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = posts.id and d.status = 'sent')`,
       })
       .from(posts)
       .where(eq(posts.publicationId, publication.id))

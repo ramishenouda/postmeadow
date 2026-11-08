@@ -1,0 +1,107 @@
+# Production stack. Lives in /opt/postmeadow on the server next to Caddyfile and .env.
+# Works the same on any Linux VPS with Docker (Hostinger today, Hetzner later).
+#
+#   docker compose pull                 # get the image built by GitHub Actions
+#   docker compose run --rm migrate     # apply database migrations
+#   docker compose up -d                # start or update everything
+
+name: postmeadow
+
+x-app: &app
+  image: ${APP_IMAGE:-ghcr.io/ramishenouda/postmeadow:latest}
+  env_file: .env
+  environment:
+    # Composed here so the database password is only set once, in .env.
+    DATABASE_URL: postgres://postmeadow:${POSTGRES_PASSWORD}@postgres:5432/postmeadow
+    STORAGE_DIR: /data/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  app:
+    <<: *app
+    restart: unless-stopped
+    volumes:
+      - storage:/data/storage
+    # Let in-flight requests and background sends finish on deploys and restarts.
+    stop_grace_period: 60s
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  migrate:
+    <<: *app
+    command: ["node", "migrate.mjs"]
+    restart: "no"
+    profiles: ["tools"] # only runs when asked: docker compose run --rm migrate
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postmeadow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postmeadow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postmeadow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+    # Not published: only reachable from the other containers.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # HTTPS certificates
+      - caddy_config:/config
+    depends_on: [app]
+    logging: *logging
+
+  backup:
+    # Nightly database dump into ./backups, keeping the last 14 days.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: postmeadow
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: postmeadow
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          file=/backups/postmeadow-$$(date +%Y-%m-%d).dump
+          if pg_dump --format=custom --file="$$file.tmp" && mv "$$file.tmp" "$$file"; then
+            echo "backup ok: $$file"
+          else
+            echo "BACKUP FAILED" >&2
+          fi
+          find /backups -name 'postmeadow-*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    logging: *logging
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

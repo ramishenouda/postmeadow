@@ -9,6 +9,7 @@ import { requirePublication } from "@/lib/dal";
 import { deleteImage, ownsImageUrl } from "@/lib/images/service";
 import { ImageError } from "@/lib/images/process";
 import { firstErrors, publicationSettingsSchema } from "@/lib/publication-schema";
+import { MAX_WELCOME_MESSAGE } from "@/lib/welcome-default";
 
 export type SettingsState = {
   ok?: boolean;
@@ -30,9 +31,18 @@ export async function updateSettings(
     logoUrl: String(formData.get("logoUrl") ?? ""),
     accentColor: String(formData.get("accentColor") ?? ""),
     fontStyle: String(formData.get("fontStyle") ?? "sans"),
+    welcomeEnabled: formData.get("welcomeEnabled") === "on" ? "on" : "",
+    welcomeMessage: String(formData.get("welcomeMessage") ?? ""),
   };
   const parsed = publicationSettingsSchema.safeParse(raw);
   if (!parsed.success) return { errors: firstErrors(parsed.error), values: raw };
+  const welcomeMessage = raw.welcomeMessage.trim();
+  if (welcomeMessage.length > MAX_WELCOME_MESSAGE) {
+    return {
+      errors: { welcomeMessage: `Keep it under ${MAX_WELCOME_MESSAGE} characters.` },
+      values: raw,
+    };
+  }
   if (parsed.data.logoUrl && !(await ownsImageUrl(user.id, parsed.data.logoUrl))) {
     return {
       errors: { logoUrl: "Upload the logo here; links to other sites can't be used." },
@@ -40,7 +50,14 @@ export async function updateSettings(
     };
   }
 
-  await db.update(publications).set(parsed.data).where(eq(publications.id, publication.id));
+  await db
+    .update(publications)
+    .set({
+      ...parsed.data,
+      welcomeEnabled: raw.welcomeEnabled === "on",
+      welcomeMessage: welcomeMessage || null,
+    })
+    .where(eq(publications.id, publication.id));
   // Public pages show the name and description.
   updateTag(publicationTag(publication.slug));
   return { ok: true };

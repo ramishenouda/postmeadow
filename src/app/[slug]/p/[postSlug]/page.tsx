@@ -19,9 +19,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     getPublishedPost(slug, postSlug),
   ]);
   if (!publication || !post) return { title: "Not found" };
+  const description = post.subtitle || markdownExcerpt(parseMarkdown(post.content), 160);
   return {
     title: { absolute: `${post.title} · ${publication.name}` },
-    description: post.subtitle || markdownExcerpt(parseMarkdown(post.content), 160),
+    description,
+    alternates: { types: { "application/rss+xml": `/${slug}/feed.xml` } },
+    openGraph: {
+      type: "article",
+      title: post.title,
+      description,
+      siteName: publication.name,
+      publishedTime: post.publishedAt?.toISOString(),
+    },
+    twitter: { card: "summary_large_image", title: post.title, description },
   };
 }
 

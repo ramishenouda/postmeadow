@@ -69,8 +69,18 @@ pipeline only ever sees the finished HTML and text.
       Business 50 GB, 10 GB add-ons), usage bar, image management.
 - [x] **Branding**: logo, accent colour (contrast-checked), sans/serif, in emails and
       public pages.
-- [ ] **Billing**: Stripe Checkout for plans and storage add-ons, customer portal,
-      webhook to update `account_billing`.
+- [x] **Billing**: Stripe Checkout for plans and storage add-ons, customer portal,
+      webhook-driven plan sync, `npm run stripe:setup`, billing page.
+- [x] **Landing and pricing pages** (`/`, `/pricing`).
+- [x] **Growth**: open/click stats with top links, welcome email, RSS feed, social
+      preview images.
+- [x] **Deployment setup**: Docker image, Compose stack (app, Postgres, Caddy,
+      nightly backups), GitHub Actions deploy, guide in `deploy/README.md`. Target:
+      Hostinger KVM 2 (Frankfurt) now, Hetzner later.
+- [ ] **Going live**: follow `deploy/README.md` on the server; Resend and Stripe in
+      live mode; off-server backup copies; error monitoring.
+- [ ] **Before launch**: Free-plan sending limits (email cost scales with subscribers).
+- [ ] **Later**: a job runner for scheduled sends and very large lists.
 
 ## After the MVP
 

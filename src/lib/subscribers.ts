@@ -98,7 +98,9 @@ export async function requestSubscription(publication: Publication, email: strin
 }
 
 /** Returns the publication slug on success, or null if the link is invalid or expired. */
-export async function confirmSubscription(token: string): Promise<string | null> {
+export async function confirmSubscription(
+  token: string,
+): Promise<{ slug: string; subscriberId: string } | null> {
   const [confirmed] = await db
     .update(subscribers)
     .set({ status: "active", confirmedAt: new Date(), confirmToken: null })
@@ -109,14 +111,14 @@ export async function confirmSubscription(token: string): Promise<string | null>
         gt(subscribers.confirmSentAt, sql`now() - ${CONFIRM_TOKEN_TTL}::interval`),
       ),
     )
-    .returning({ publicationId: subscribers.publicationId });
+    .returning({ id: subscribers.id, publicationId: subscribers.publicationId });
   if (!confirmed) return null;
 
   const [publication] = await db
     .select({ slug: publications.slug })
     .from(publications)
     .where(eq(publications.id, confirmed.publicationId));
-  return publication?.slug ?? null;
+  return publication ? { slug: publication.slug, subscriberId: confirmed.id } : null;
 }
 
 /** Look up a subscriber by unsubscribe token, with their publication. */

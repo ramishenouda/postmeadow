@@ -120,6 +120,8 @@ describe("public page and double opt-in", () => {
     assert.equal(res.status, 303);
     assert.match(res.headers.get("location") ?? "", new RegExp(`/${SLUG}/subscribed$`));
     assert.equal(await subscriberStatus("reader1@example.com"), "active");
+    // Confirming sends the welcome email (in the background); wait so later tests start clean.
+    await mail.waitFor("reader1@example.com", "Welcome to");
 
     const reused = await new Client().fetch(confirm);
     assert.match(reused.headers.get("location") ?? "", /\/subscription-invalid$/);
@@ -360,7 +362,13 @@ describe("sending", () => {
   });
 
   test("the archive and post page show the sent post", async () => {
-    assert.match(await new Client().page(`/${SLUG}`), /Issue #1/);
+    // The post is marked sent just before the archive's cache is refreshed, so allow a moment.
+    let archive = "";
+    for (let i = 0; i < 20 && !archive.includes("Issue #1"); i++) {
+      if (i) await new Promise((r) => setTimeout(r, 150));
+      archive = await new Client().page(`/${SLUG}`);
+    }
+    assert.match(archive, /Issue #1/);
     const html = await new Client().page(`/${SLUG}/p/issue-1`);
     assert.match(html, /What(&#x27;|')s new/);
     assert.doesNotMatch(html, /<script>alert/);

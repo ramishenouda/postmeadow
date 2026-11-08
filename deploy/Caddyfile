@@ -1,0 +1,26 @@
+# Caddy terminates HTTPS (certificates from Let's Encrypt, renewed automatically)
+# and forwards to the app. SITE_DOMAIN comes from .env, e.g. postmeadow.com.
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# The client's real IP, for rate limiting (CLIENT_IP_HEADER=x-real-ip).
+		header_up X-Real-IP {remote_host}
+		# Stream pages as they render (React Suspense) instead of buffering.
+		flush_interval -1
+	}
+}
+
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}

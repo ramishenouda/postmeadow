@@ -12,7 +12,7 @@ import { deliveries, subscribers } from "@/db/schema";
 import { env } from "@/env";
 import { formatDateTime } from "@/lib/format";
 import { getOwnedPost } from "@/lib/posts";
-import { deliveryStats } from "@/lib/sending";
+import { deliveryStats, engagementStats } from "@/lib/sending";
 import { AutoRefresh } from "./auto-refresh";
 import { PostEditor } from "./post-editor";
 import { ResumeButton } from "./resume-button";
@@ -56,7 +56,7 @@ async function PostLoader({ params }: Pick<Props, "params">) {
     );
   }
 
-  const stats = await deliveryStats(post.id);
+  const [stats, engagement] = await Promise.all([deliveryStats(post.id), engagementStats(post.id)]);
   const failures =
     stats.failed + stats.bounced + stats.complained > 0
       ? await db
@@ -125,6 +125,64 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         {stats.bounced ? <Stat label="Bounced" value={stats.bounced} /> : null}
         {stats.complained ? <Stat label="Marked as spam" value={stats.complained} /> : null}
       </div>
+
+      {engagement.delivered > 0 ? (
+        <section className="space-y-3" aria-labelledby="engagement-heading">
+          <h2 id="engagement-heading" className="font-medium">
+            Engagement
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardDescription>Opened</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">{engagement.openRate}%</CardTitle>
+                <p className="text-muted-foreground text-xs">
+                  {engagement.opened.toLocaleString("en")} of{" "}
+                  {engagement.delivered.toLocaleString("en")} readers
+                </p>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Clicked</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">{engagement.clickRate}%</CardTitle>
+                <p className="text-muted-foreground text-xs">
+                  {engagement.clicked.toLocaleString("en")} of{" "}
+                  {engagement.delivered.toLocaleString("en")} readers
+                </p>
+              </CardHeader>
+            </Card>
+          </div>
+          {engagement.topLinks.length ? (
+            <div className="rounded-xl border">
+              <h3 className="border-b px-4 py-2 text-sm font-medium">Top links</h3>
+              <ul className="divide-y text-sm">
+                {engagement.topLinks.map((l) => (
+                  <li key={l.url} className="flex items-center justify-between gap-4 px-4 py-2">
+                    <a
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 truncate hover:underline"
+                      title={l.url}
+                    >
+                      {l.url.replace(/^https?:\/\//, "")}
+                    </a>
+                    <span className="text-muted-foreground shrink-0 tabular-nums">
+                      {l.people.toLocaleString("en")} {l.people === 1 ? "reader" : "readers"} ·{" "}
+                      {l.clicks.toLocaleString("en")} {l.clicks === 1 ? "click" : "clicks"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="text-muted-foreground text-xs">
+            Opens are approximate: some mail apps (notably Apple Mail) load images automatically,
+            which counts as an open. Clicks are reliable.
+          </p>
+        </section>
+      ) : null}
 
       {post.status === "sending" ? (
         <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-sm">

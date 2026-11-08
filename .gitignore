@@ -44,3 +44,6 @@ next-env.d.ts
 # uploaded files (local storage driver)
 /storage
 /storage-test
+
+# local copies of production backups
+/backups

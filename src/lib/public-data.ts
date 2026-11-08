@@ -51,6 +51,26 @@ export async function getPublishedPosts(slug: string) {
     .orderBy(desc(posts.publishedAt));
 }
 
+/** The latest sent posts with their content, for the RSS feed. */
+export async function getFeedPosts(slug: string, limit = 20) {
+  "use cache";
+  cacheTag(publicationTag(slug));
+  cacheLife("minutes");
+  return db
+    .select({
+      title: posts.title,
+      subtitle: posts.subtitle,
+      slug: posts.slug,
+      content: posts.content,
+      publishedAt: posts.publishedAt,
+    })
+    .from(posts)
+    .innerJoin(publications, eq(posts.publicationId, publications.id))
+    .where(and(eq(publications.slug, slug), eq(posts.status, "sent")))
+    .orderBy(desc(posts.publishedAt))
+    .limit(limit);
+}
+
 export async function getPublishedPost(slug: string, postSlug: string) {
   "use cache";
   cacheTag(publicationTag(slug));

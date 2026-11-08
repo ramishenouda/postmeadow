@@ -8,6 +8,9 @@ import { getSessionCookie } from "better-auth/cookies";
 export function proxy(request: NextRequest) {
   if (!getSessionCookie(request)) {
     const url = new URL("/sign-in", request.url);
+    // Come back here after signing in (e.g. pricing page → billing).
+    const { pathname, search } = request.nextUrl;
+    if (pathname !== "/dashboard") url.searchParams.set("next", pathname + search);
     return NextResponse.redirect(url);
   }
   return NextResponse.next();

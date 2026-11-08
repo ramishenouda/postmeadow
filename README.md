@@ -17,6 +17,10 @@ See [PLAN.md](PLAN.md) for the roadmap.
 - **Subscribers** can be searched, filtered, added by hand, imported from CSV and exported.
 - **Sending** happens in batches in the background, with per-recipient status. A send that
   was interrupted can be resumed without emailing anyone twice.
+- **Engagement:** open rate, click rate and top links per post; a welcome email when someone
+  confirms; an RSS feed and social preview images for every publication and post.
+- **Plans and billing:** Free, Pro and Business with storage add-ons, paid through Stripe
+  (Checkout, customer portal, webhooks). A landing page at `/` and pricing at `/pricing`.
 
 ## Requirements
 
@@ -42,20 +46,21 @@ link in the message that arrives in Mailpit. New accounts go to onboarding to cr
 
 ## Scripts
 
-| Script                | What it does                                    |
-| --------------------- | ----------------------------------------------- |
-| `npm run dev`         | Start the dev server                            |
-| `npm run build`       | Production build                                |
-| `npm run lint`        | ESLint                                          |
-| `npm run typecheck`   | Generate route types, then TypeScript           |
-| `npm run format`      | Prettier                                        |
-| `npm test`            | Unit tests (Markdown round trip, editor)        |
-| `npm run test:e2e`    | End-to-end tests on an isolated stack           |
-| `npm run db:up`       | Start Postgres + Mailpit and wait until healthy |
-| `npm run db:down`     | Stop the containers (data is kept in a volume)  |
-| `npm run db:generate` | Create a migration from `src/db/schema.ts`      |
-| `npm run db:migrate`  | Apply pending migrations                        |
-| `npm run db:studio`   | Browse the database in Drizzle Studio           |
+| Script                 | What it does                                    |
+| ---------------------- | ----------------------------------------------- |
+| `npm run dev`          | Start the dev server                            |
+| `npm run build`        | Production build                                |
+| `npm run lint`         | ESLint                                          |
+| `npm run typecheck`    | Generate route types, then TypeScript           |
+| `npm run format`       | Prettier                                        |
+| `npm test`             | Unit tests (Markdown round trip, editor)        |
+| `npm run test:e2e`     | End-to-end tests on an isolated stack           |
+| `npm run db:up`        | Start Postgres + Mailpit and wait until healthy |
+| `npm run db:down`      | Stop the containers (data is kept in a volume)  |
+| `npm run db:generate`  | Create a migration from `src/db/schema.ts`      |
+| `npm run db:migrate`   | Apply pending migrations                        |
+| `npm run db:studio`    | Browse the database in Drizzle Studio           |
+| `npm run stripe:setup` | Create/update products and prices in Stripe     |
 
 ## Project layout
 
@@ -125,7 +130,28 @@ Each account has a storage quota from its plan, defined in `src/lib/plans.ts`:
 Free 500 MB, Pro 10 GB, Business 50 GB, plus 10 GB add-on packs for paid plans. An upload
 that would go over the quota is refused with a message. Images used in a sent email, or as the
 logo, can't be deleted, because those emails must keep working. Everything else can be deleted
-in Settings → Storage. Plans are set in the `account_billing` table; Stripe billing comes next.
+in Settings → Storage.
+
+## Billing
+
+Prices live next to the limits in `src/lib/plans.ts` (Pro $9/month or $90/year, Business
+$29/month or $290/year, storage add-on $3/month or $30/year). To set up Stripe:
+
+1. Put your **test-mode** keys in `.env.local`: `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`
+   from `stripe listen --forward-to localhost:3000/api/webhooks/stripe` (Stripe CLI).
+2. Run `npm run stripe:setup`. It creates the products and prices, found again later by lookup
+   keys like `postmeadow_pro_month`. Run it again after changing a price: the new price takes
+   over the lookup key and the old one is archived, so existing subscribers aren't moved.
+3. In Stripe → Settings → Billing → Customer portal, enable cancellations, payment method
+   updates and invoice history.
+
+How it works: **webhooks are the only thing that changes a plan.** Upgrading opens Stripe
+Checkout; switching plans or add-ons updates the subscription in Stripe, prorated; and the
+`customer.subscription.*` webhook then writes the result to `account_billing`. Events are
+verified, processed once, and ignored if older than the last one applied. A failed payment
+(`past_due`) keeps the plan while Stripe retries and shows a banner. Cancelling keeps the plan
+until the end of the paid period, then the account is back on Free. Going over the new quota
+pauses uploads; nothing is deleted. Without Stripe keys, billing is simply switched off.
 
 ## Abuse protection
 
@@ -144,15 +170,19 @@ npm run test:e2e    # end-to-end: the whole product over HTTP
 ```
 
 `test:e2e` never touches your dev data. It creates a separate `newsletter_test` database, starts a
-separate Mailpit (`docker compose --profile test`, ports 1026/8026), builds the app and runs it
-on port 3100. The tests drive it like a browser: real sign-in emails, server actions, webhooks
-signed like Resend's. Use `-- --skip-build` to reuse the last build, or pass a file to run just
+separate Mailpit and Stripe's official API fake, `stripe-mock` (`docker compose --profile test`),
+builds the app and runs it on port 3100. The tests drive it like a browser: real sign-in emails,
+server actions, and webhooks signed the way Resend and Stripe sign them. Use `-- --skip-build` to reuse the last build, or pass a file to run just
 that one: `npm run test:e2e -- --skip-build tests/e2e/webhooks.test.ts`.
 
 CI (`.github/workflows/ci.yml`) runs formatting, lint, typecheck, unit and end-to-end tests on
 every push and pull request.
 
 ## Going to production
+
+**The step-by-step guide is [deploy/README.md](deploy/README.md):** Docker image, Docker
+Compose on a VPS (app, Postgres, Caddy for HTTPS, nightly backups), deploys from GitHub
+Actions, and how to move servers. What the app itself needs in production:
 
 1. **Email:** create a [Resend](https://resend.com) account, verify your sending domain (SPF,
    DKIM and DMARC records), then set `EMAIL_TRANSPORT=resend`, `RESEND_API_KEY`, and
@@ -163,13 +193,18 @@ every push and pull request.
 4. **Long sends:** sending runs in `after()` once the send request has been answered. On
    serverless hosts with short time limits, a large send can stop part-way. Use "Resume
    sending" on the post page, or move `processDeliveries` into a job queue.
-5. **Bounces and complaints:** in Resend → Webhooks, add `{APP_URL}/api/webhooks/resend` with
-   the `email.bounced`, `email.complained`, `email.suppressed` and `email.failed` events, and put
-   its signing secret in `RESEND_WEBHOOK_SECRET`. Hard bounces and suppressions mark the
-   subscriber `bounced`; spam complaints unsubscribe them. Both are skipped by future sends.
-6. **Uploads:** mount `STORAGE_DIR` on a persistent, backed-up volume. If you run more than
+5. **Bounces, complaints, opens and clicks:** in Resend → Webhooks, add
+   `{APP_URL}/api/webhooks/resend` with the `email.bounced`, `email.complained`,
+   `email.suppressed`, `email.failed`, `email.opened` and `email.clicked` events, and put its
+   signing secret in `RESEND_WEBHOOK_SECRET`. Turn on open and click tracking for your domain
+   in Resend. Hard bounces and suppressions mark the subscriber `bounced`; spam complaints
+   unsubscribe them. Both are skipped by future sends.
+6. **Billing:** use live Stripe keys, run `npm run stripe:setup -- --live` once, point a Stripe
+   webhook at `{APP_URL}/api/webhooks/stripe` with `checkout.session.completed` and
+   `customer.subscription.*`, and enable the customer portal (see Billing above).
+7. **Uploads:** mount `STORAGE_DIR` on a persistent, backed-up volume. If you run more than
    one app instance, they must share it (or add another storage driver in `src/lib/storage`).
    Putting a CDN in front of `/media/` keeps email-open bandwidth off the app server.
-7. **Client IP:** set `CLIENT_IP_HEADER` to the header your host sets (Vercel: `x-real-ip`,
+8. **Client IP:** set `CLIENT_IP_HEADER` to the header your host sets (Vercel: `x-real-ip`,
    Fly.io: `fly-client-ip`, Cloudflare: `cf-connecting-ip`), so the subscribe rate limit can't be
    dodged with a forged `X-Forwarded-For`.

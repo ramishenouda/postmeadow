@@ -1,0 +1,13 @@
+# Never send secrets, local data or build output into the image build.
+.env*
+!.env.example
+node_modules
+.next
+storage
+storage-test
+backups
+.git
+.github
+tests
+*.log
+.DS_Store

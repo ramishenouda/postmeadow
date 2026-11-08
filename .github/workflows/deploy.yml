@@ -1,0 +1,86 @@
+name: Deploy
+
+# Manual for now: Actions → Deploy → Run workflow.
+# To deploy automatically whenever CI passes on main, replace `on:` with:
+#   on:
+#     workflow_run:
+#       workflows: [CI]
+#       types: [completed]
+#       branches: [main]
+# and add `if: github.event.workflow_run.conclusion == 'success'` to the job.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write # push the image to GitHub Container Registry
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never interrupt a deploy half-way
+
+env:
+  IMAGE: ghcr.io/ramishenouda/postmeadow
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to the server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh_opts="-i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+
+          # Keep the server's compose file and Caddyfile in sync with the repo.
+          scp $ssh_opts deploy/docker-compose.yml deploy/Caddyfile "$TARGET:/opt/postmeadow/"
+
+          # Pin this exact build, migrate, then (re)start. The previous image stays
+          # available for a rollback (see deploy/README.md).
+          ssh $ssh_opts "$TARGET" bash -se <<EOF
+          set -euo pipefail
+          cd /opt/postmeadow
+          sed -i 's|^APP_IMAGE=.*|APP_IMAGE=${IMAGE}:${GITHUB_SHA}|' .env
+          docker compose pull app
+          docker compose run --rm migrate
+          docker compose up -d --remove-orphans
+          docker image prune -f >/dev/null
+          EOF
+
+      - name: Check the live site
+        env:
+          SITE: ${{ secrets.DEPLOY_SITE_URL }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$SITE/api/health"; then echo; echo "Healthy."; exit 0; fi
+            sleep 5
+          done
+          echo "The site did not become healthy after deploying." >&2
+          exit 1

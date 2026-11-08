@@ -40,6 +40,8 @@ async function Settings() {
         logoUrl: publication.logoUrl ?? "",
         accentColor: publication.accentColor ?? "",
         fontStyle: publication.fontStyle,
+        welcomeEnabled: publication.welcomeEnabled ? "on" : "",
+        welcomeMessage: publication.welcomeMessage ?? "",
       }}
     />
   );

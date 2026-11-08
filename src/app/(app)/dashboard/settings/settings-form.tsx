@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { accentIsReadable, contrastRatio, DEFAULT_ACCENT, HEX_COLOR } from "@/lib/color";
 import { cn } from "@/lib/utils";
+import { DEFAULT_WELCOME_MESSAGE, MAX_WELCOME_MESSAGE } from "@/lib/welcome-default";
 import { updateSettings, type SettingsState } from "./actions";
 
 type Values = {
@@ -19,6 +20,9 @@ type Values = {
   logoUrl: string;
   accentColor: string;
   fontStyle: string;
+  /** "on" or "" (checkbox semantics, so it round-trips through the form). */
+  welcomeEnabled: string;
+  welcomeMessage: string;
 };
 
 export function SettingsForm({ address, values }: { address: string; values: Values }) {
@@ -67,6 +71,40 @@ export function SettingsForm({ address, values }: { address: string; values: Val
       </Card>
 
       <Branding initial={v} errors={errors} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome email</CardTitle>
+          <CardDescription>
+            Sent once, right after a reader confirms their subscription.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="welcomeEnabled"
+              defaultChecked={v.welcomeEnabled === "on"}
+            />
+            Send a welcome email to new subscribers
+          </label>
+          <Field
+            id="welcomeMessage"
+            label="Message"
+            hint="Markdown works: **bold**, [links](https://…), lists. Leave empty to use the default shown."
+            error={errors.welcomeMessage}
+          >
+            <Textarea
+              id="welcomeMessage"
+              name="welcomeMessage"
+              defaultValue={v.welcomeMessage}
+              placeholder={DEFAULT_WELCOME_MESSAGE}
+              maxLength={MAX_WELCOME_MESSAGE}
+              rows={5}
+            />
+          </Field>
+        </CardContent>
+      </Card>
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending}>

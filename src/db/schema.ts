@@ -1,8 +1,10 @@
 import {
+  boolean,
   index,
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -38,6 +40,9 @@ export const publications = pgTable(
     logoUrl: text("logo_url"),
     accentColor: text("accent_color"), // "#rrggbb"; null = default
     fontStyle: text("font_style").notNull().default("sans"), // "sans" | "serif"
+    // Welcome email sent when someone confirms. Null message = the default text.
+    welcomeEnabled: boolean("welcome_enabled").notNull().default(true),
+    welcomeMessage: text("welcome_message"),
     ...timestamps,
   },
   (t) => [index("publications_owner_idx").on(t.ownerId)],
@@ -129,6 +134,12 @@ export const deliveries = pgTable(
     providerMessageId: text("provider_message_id"),
     error: text("error"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    // Engagement, from the provider's open/click events. Opens are approximate
+    // (Apple Mail Privacy Protection pre-loads images), clicks are reliable.
+    openedAt: timestamp("opened_at", { withTimezone: true }),
+    clickedAt: timestamp("clicked_at", { withTimezone: true }),
+    opens: integer("opens").notNull().default(0),
+    clicks: integer("clicks").notNull().default(0),
     ...timestamps,
   },
   (t) => [
@@ -167,6 +178,15 @@ export const accountBilling = pgTable("account_billing", {
     .references(() => user.id, { onDelete: "cascade" }),
   plan: text("plan").notNull().default("free"),
   storageAddons: integer("storage_addons").notNull().default(0),
+  // Stripe state, written only from verified webhooks (the source of truth).
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  billingInterval: text("billing_interval"), // "month" | "year"
+  subscriptionStatus: text("subscription_status"), // Stripe's status, e.g. "active", "past_due"
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  // `created` of the last applied Stripe event; older events arriving late are ignored.
+  stripeEventAt: timestamp("stripe_event_at", { withTimezone: true }),
   ...timestamps,
 });
 
@@ -187,4 +207,17 @@ export const images = pgTable(
     createdAt: timestamps.createdAt,
   },
   (t) => [index("images_owner_idx").on(t.ownerId)],
+);
+
+/** Clicks per link per recipient, for "top links" on a sent post. */
+export const deliveryLinkClicks = pgTable(
+  "delivery_link_clicks",
+  {
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => deliveries.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    clicks: integer("clicks").notNull().default(1),
+  },
+  (t) => [primaryKey({ columns: [t.deliveryId, t.url] })],
 );

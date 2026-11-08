@@ -40,7 +40,8 @@ async function PostList() {
       status: posts.status,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
-      sent: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = ${posts.id} and d.status = 'sent')`,
+      sent: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = posts.id and d.status = 'sent')`,
+      opened: sql<number>`(select count(d.opened_at)::int from ${deliveries} d where d.post_id = posts.id)`,
     })
     .from(posts)
     .where(eq(posts.publicationId, publication.id))
@@ -70,7 +71,10 @@ async function PostList() {
               <p className="text-muted-foreground text-xs">
                 {post.status === "draft"
                   ? `Edited ${formatDate(post.updatedAt)}`
-                  : `Sent ${formatDate(post.publishedAt)} · ${post.sent.toLocaleString("en")} delivered`}
+                  : `Sent ${formatDate(post.publishedAt)} · ${post.sent.toLocaleString("en")} delivered` +
+                    (post.sent && post.opened
+                      ? ` · ${Math.round((post.opened / post.sent) * 100)}% opened`
+                      : "")}
               </p>
             </div>
             <StatusBadge status={post.status} />

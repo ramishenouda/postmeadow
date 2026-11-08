@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { deliveries, subscribers } from "@/db/schema";
+import { deliveries, deliveryLinkClicks, subscribers } from "@/db/schema";
 
 /** The subset of Resend's webhook payload we use. */
 export type ResendEvent = {
@@ -13,8 +13,60 @@ export type ResendEvent = {
     bounce?: { type: string; subType: string; message: string };
     suppressed?: { type: string; message: string };
     failed?: { reason?: string };
+    click?: { link: string; timestamp?: string };
   };
 };
+
+/**
+ * Opens and clicks on newsletter issues. Events for other emails (confirmations,
+ * tests) have no delivery row and are ignored. Duplicate events are already
+ * filtered out by the webhook route, so counting is safe.
+ */
+async function recordEngagement(event: ResendEvent): Promise<"opened" | "clicked" | "ignored"> {
+  const at = new Date(event.created_at);
+  // Raw SQL parameters must be strings: the driver can't serialise a Date inside sql``.
+  const when = sql`${(Number.isNaN(at.getTime()) ? new Date() : at).toISOString()}::timestamptz`;
+  const [delivery] = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(eq(deliveries.providerMessageId, event.data.email_id))
+    .limit(1);
+  if (!delivery) return "ignored";
+
+  if (event.type === "email.opened") {
+    await db
+      .update(deliveries)
+      .set({
+        opens: sql`${deliveries.opens} + 1`,
+        openedAt: sql`coalesce(${deliveries.openedAt}, ${when})`,
+      })
+      .where(eq(deliveries.id, delivery.id));
+    return "opened";
+  }
+
+  const link = event.data.click?.link ?? "";
+  await db.transaction(async (tx) => {
+    await tx
+      .update(deliveries)
+      .set({
+        clicks: sql`${deliveries.clicks} + 1`,
+        clickedAt: sql`coalesce(${deliveries.clickedAt}, ${when})`,
+        // A click implies the email was opened, even if the open pixel was blocked.
+        openedAt: sql`coalesce(${deliveries.openedAt}, ${when})`,
+      })
+      .where(eq(deliveries.id, delivery.id));
+    if (/^https?:\/\//i.test(link) && link.length <= 2000) {
+      await tx
+        .insert(deliveryLinkClicks)
+        .values({ deliveryId: delivery.id, url: link })
+        .onConflictDoUpdate({
+          target: [deliveryLinkClicks.deliveryId, deliveryLinkClicks.url],
+          set: { clicks: sql`${deliveryLinkClicks.clicks} + 1` },
+        });
+    }
+  });
+  return "clicked";
+}
 
 type Outcome =
   | { kind: "hard-bounce"; reason: string }
@@ -49,7 +101,12 @@ function classify(event: ResendEvent): Outcome {
 }
 
 /** Applies a verified Resend event. Safe to run twice for the same event. */
-export async function handleResendEvent(event: ResendEvent): Promise<Outcome["kind"]> {
+export async function handleResendEvent(
+  event: ResendEvent,
+): Promise<Outcome["kind"] | "opened" | "clicked"> {
+  if (event.type === "email.opened" || event.type === "email.clicked") {
+    return recordEngagement(event);
+  }
   const outcome = classify(event);
   if (outcome.kind === "ignored") return outcome.kind;
 

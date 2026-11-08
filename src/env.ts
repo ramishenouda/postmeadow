@@ -13,6 +13,11 @@ const schema = z
     EMAIL_FROM: z.string().min(1),
     // Signing secret of the Resend webhook (whsec_…). Enables bounce/complaint handling.
     RESEND_WEBHOOK_SECRET: z.string().optional(),
+    // Stripe. Billing is switched off (the app still works) until both are set.
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    // Tests only: point the Stripe SDK at stripe-mock, e.g. http://localhost:12111
+    STRIPE_API_BASE: z.url().optional(),
     // Directory for uploaded files (a persistent, backed-up volume in production).
     STORAGE_DIR: z.string().default("./storage"),
     // Max confirmation emails per publication per hour (backstop against sign-up abuse).

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +55,11 @@ export function StorageSection({
         </div>
         {percent >= 90 ? (
           <p className="text-destructive text-sm">
-            You&apos;re almost out of storage. Delete images you no longer need. Larger plans are
-            coming soon.
+            You&apos;re almost out of storage. Delete images you no longer need, or{" "}
+            <Link href="/dashboard/billing" className="underline underline-offset-2">
+              get more storage
+            </Link>
+            .
           </p>
         ) : null}
         {error ? (

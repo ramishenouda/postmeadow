@@ -14,6 +14,7 @@ export async function generateMetadata({ params }: PageProps<"/[slug]">): Promis
   return {
     title: { absolute: publication.name },
     description: publication.description ?? undefined,
+    alternates: { types: { "application/rss+xml": `/${slug}/feed.xml` } },
   };
 }
 

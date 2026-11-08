@@ -18,9 +18,15 @@ type State =
   | { status: "sent"; email: string }
   | { status: "error"; message: string };
 
+/** Only same-site paths in the dashboard; never an outside URL (open redirect). */
+function safeNext(value: string | null): string {
+  return value && /^\/dashboard(\/[\w\-/?=&.%]*)?$/.test(value) ? value : "/dashboard";
+}
+
 export function SignInForm() {
   const searchParams = useSearchParams();
   const linkError = searchParams.get("error");
+  const next = safeNext(searchParams.get("next"));
   const [state, setState] = useState<State>(
     linkError
       ? {
@@ -38,7 +44,7 @@ export function SignInForm() {
     setState({ status: "sending" });
     const { error } = await authClient.signIn.magicLink({
       email,
-      callbackURL: "/dashboard",
+      callbackURL: next,
       newUserCallbackURL: "/onboarding",
       errorCallbackURL: "/sign-in",
     });

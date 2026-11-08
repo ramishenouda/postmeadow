@@ -34,5 +34,12 @@ services:
       - "127.0.0.1:1026:1025"
       - "127.0.0.1:8026:8025"
 
+  # Stripe's official API fake, so billing tests run without a Stripe account.
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    profiles: ["test"]
+    ports:
+      - "127.0.0.1:12111:12111"
+
 volumes:
   pgdata:

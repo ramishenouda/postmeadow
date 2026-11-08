@@ -2,7 +2,7 @@ import "server-only";
 import { and, count, eq, inArray, lt, sql } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { db } from "@/db";
-import { deliveries, posts, publications, subscribers } from "@/db/schema";
+import { deliveries, deliveryLinkClicks, posts, publications, subscribers } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import {
   getEmailRenderer,
@@ -207,6 +207,41 @@ export async function processDeliveries(postId: string): Promise<void> {
     // The post now appears in the public archive.
     revalidateTag(publicationTag(publication.slug), { expire: 0 });
   }
+}
+
+/** Opens, clicks and the most-clicked links for a sent post. */
+export async function engagementStats(postId: string) {
+  const [[totals], topLinks] = await Promise.all([
+    db
+      .select({
+        // Delivered = accepted by the provider and not bounced (spam reports were delivered).
+        delivered: sql<number>`count(*) filter (where ${deliveries.status} in ('sent', 'complained'))::int`,
+        opened: sql<number>`count(${deliveries.openedAt})::int`,
+        clicked: sql<number>`count(${deliveries.clickedAt})::int`,
+      })
+      .from(deliveries)
+      .where(eq(deliveries.postId, postId)),
+    db
+      .select({
+        url: deliveryLinkClicks.url,
+        clicks: sql<number>`sum(${deliveryLinkClicks.clicks})::int`,
+        people: sql<number>`count(*)::int`,
+      })
+      .from(deliveryLinkClicks)
+      .innerJoin(deliveries, eq(deliveryLinkClicks.deliveryId, deliveries.id))
+      .where(eq(deliveries.postId, postId))
+      .groupBy(deliveryLinkClicks.url)
+      .orderBy(sql`count(*) desc`, sql`sum(${deliveryLinkClicks.clicks}) desc`)
+      .limit(10),
+  ]);
+  const rate = (n: number) =>
+    totals.delivered ? Math.round((n / totals.delivered) * 1000) / 10 : 0;
+  return {
+    ...totals,
+    openRate: rate(totals.opened),
+    clickRate: rate(totals.clicked),
+    topLinks,
+  };
 }
 
 export async function deliveryStats(postId: string) {
