@@ -14,6 +14,9 @@ export type RenderablePost = {
 
 export type RenderablePublication = {
   name: string;
+  logoUrl?: string | null;
+  accentColor?: string | null;
+  fontStyle?: string | null;
 };
 
 export type RenderUrls = {

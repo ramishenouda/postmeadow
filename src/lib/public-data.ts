@@ -24,6 +24,9 @@ export async function getPublicPublication(slug: string) {
       name: publications.name,
       slug: publications.slug,
       description: publications.description,
+      logoUrl: publications.logoUrl,
+      accentColor: publications.accentColor,
+      fontStyle: publications.fontStyle,
     })
     .from(publications)
     .where(eq(publications.slug, slug))

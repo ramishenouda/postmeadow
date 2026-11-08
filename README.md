@@ -6,8 +6,12 @@ See [PLAN.md](PLAN.md) for the roadmap.
 ## What it does
 
 - **Writers** sign in with an emailed link, create a publication, write posts in a rich-text
-  editor (toolbar, keyboard shortcuts, links, images, tables) with a live preview of the real
-  email, send themselves a test, then send to everyone.
+  editor (toolbar, `/` menu, floating toolbar on selections, image uploads by paste or drag and
+  drop, tables) with a live preview of the real email, send themselves a test, then send to everyone.
+- **Branding:** a logo, an accent colour (checked for readability) and a sans or serif font,
+  applied to emails and public pages.
+- **Storage:** uploads live on our own server; each account has a quota from its plan, with a
+  usage bar and image management in Settings.
 - **Readers** subscribe on the publication's page (`/{slug}`), confirm by email (double
   opt-in), read the archive on the web, and unsubscribe in one click.
 - **Subscribers** can be searched, filtered, added by hand, imported from CSV and exported.
@@ -66,10 +70,12 @@ src/
     api/subscriptions/    Double opt-in confirmation link
     api/unsubscribe/      RFC 8058 one-click unsubscribe (List-Unsubscribe-Post)
     api/webhooks/resend/  Signed Resend webhooks (bounces, complaints)
+    api/uploads/          Image upload API
+    media/[...key]/       Serves uploaded files
     api/posts/[id]/preview  Live email preview for the editor
   db/schema.ts            Drizzle schema (source of truth for migrations)
   db/auth-schema.ts       Tables Better Auth needs (user, session, account, verification)
-  components/editor/      Rich-text editor (Tiptap): toolbar, link popover, image dialog
+  components/editor/      Rich-text editor (Tiptap): toolbar, slash menu, bubble menu, uploads
   emails/                 React Email templates (newsletter, confirmation, sign-in)
   lib/markdown/           Markdown → syntax tree → components (shared by email and web)
   lib/email/renderers/    Pluggable email builders, keyed by posts.content_format
@@ -77,6 +83,9 @@ src/
   lib/sending.ts          Queue, batch, resume; claims rows with FOR UPDATE SKIP LOCKED
   lib/subscribers.ts      Subscribe / confirm / unsubscribe logic
   lib/rate-limit.ts       Postgres-backed fixed-window rate limiter
+  lib/plans.ts            Plans and storage limits
+  lib/images/             Upload processing (sharp), quota checks, image management
+  lib/storage/            Storage driver (local disk; swappable)
   lib/webhooks/resend.ts  Bounce / complaint / suppression handling
   lib/public-data.ts      Cached reads for public pages ("use cache" + cache tags)
   lib/dal.ts              Data Access Layer: session + ownership checks
@@ -99,8 +108,24 @@ Only formatting that survives that round trip is enabled (`src/components/editor
 Underline, for example, has no Markdown syntax and is left out. `npm test` checks that
 Markdown written by the editor renders the same way in emails.
 
+Type `/` for a menu of blocks (headings, lists, quote, image, divider, code, table). Selecting
+text shows a small floating toolbar. Paste or drop images straight into the text to upload them.
+
 Shortcuts: `Ctrl/⌘+B` bold, `Ctrl/⌘+I` italic, `Ctrl/⌘+K` link, `Ctrl/⌘+E` inline code,
 `Ctrl/⌘+Z` undo. Typing `## `, `- `, `1. `, `> ` or ` ``` ` at the start of a line formats it.
+
+## Uploads, storage and plans
+
+Images are uploaded to `/api/uploads`, checked to be real PNG, JPEG, GIF or WebP files,
+rotated upright, stripped of metadata (including GPS location), scaled to at most 1600px wide,
+and re-encoded (WebP becomes JPEG or PNG, which Outlook can show). They're stored under
+`STORAGE_DIR` on this server and served from `/media/…` with year-long caching.
+
+Each account has a storage quota from its plan, defined in `src/lib/plans.ts`:
+Free 500 MB, Pro 10 GB, Business 50 GB, plus 10 GB add-on packs for paid plans. An upload
+that would go over the quota is refused with a message. Images used in a sent email, or as the
+logo, can't be deleted, because those emails must keep working. Everything else can be deleted
+in Settings → Storage. Plans are set in the `account_billing` table; Stripe billing comes next.
 
 ## Abuse protection
 
@@ -142,6 +167,9 @@ every push and pull request.
    the `email.bounced`, `email.complained`, `email.suppressed` and `email.failed` events, and put
    its signing secret in `RESEND_WEBHOOK_SECRET`. Hard bounces and suppressions mark the
    subscriber `bounced`; spam complaints unsubscribe them. Both are skipped by future sends.
-6. **Client IP:** set `CLIENT_IP_HEADER` to the header your host sets (Vercel: `x-real-ip`,
+6. **Uploads:** mount `STORAGE_DIR` on a persistent, backed-up volume. If you run more than
+   one app instance, they must share it (or add another storage driver in `src/lib/storage`).
+   Putting a CDN in front of `/media/` keeps email-open bandwidth off the app server.
+7. **Client IP:** set `CLIENT_IP_HEADER` to the header your host sets (Vercel: `x-real-ip`,
    Fly.io: `fly-client-ip`, Cloudflare: `cf-connecting-ip`), so the subscribe rate limit can't be
    dodged with a forged `X-Forwarded-For`.

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Brand, Logo } from "@/components/brand";
 import { Markdown } from "@/components/markdown";
 import { formatDate } from "@/lib/format";
 import { markdownExcerpt } from "@/lib/markdown/excerpt";
@@ -41,25 +42,28 @@ async function Post({ params }: Pick<Props, "params">) {
   if (!publication || !post) notFound();
 
   return (
-    <article className="space-y-10">
-      <header className="space-y-3">
-        <Link
-          href={`/${publication.slug}`}
-          className="text-muted-foreground hover:text-foreground text-sm font-medium"
-        >
-          {publication.name}
-        </Link>
-        <h1 className="text-4xl font-semibold tracking-tight text-balance">{post.title}</h1>
-        {post.subtitle ? <p className="text-muted-foreground text-xl">{post.subtitle}</p> : null}
-        <p className="text-muted-foreground text-sm">{formatDate(post.publishedAt)}</p>
-      </header>
+    <Brand publication={publication}>
+      <article className="space-y-10">
+        <header className="space-y-3">
+          <Logo publication={publication} className="h-8" />
+          <Link
+            href={`/${publication.slug}`}
+            className="text-muted-foreground hover:text-foreground text-sm font-medium"
+          >
+            {publication.name}
+          </Link>
+          <h1 className="text-4xl font-semibold tracking-tight text-balance">{post.title}</h1>
+          {post.subtitle ? <p className="text-muted-foreground text-xl">{post.subtitle}</p> : null}
+          <p className="text-muted-foreground text-sm">{formatDate(post.publishedAt)}</p>
+        </header>
 
-      <Markdown content={post.content} />
+        <Markdown content={post.content} className="prose-a:text-(--accent)" />
 
-      <aside className="bg-muted/30 space-y-3 rounded-xl border p-6">
-        <p className="font-medium">Get the next one in your inbox</p>
-        <SubscribeForm slug={publication.slug} />
-      </aside>
-    </article>
+        <aside className="bg-muted/30 space-y-3 rounded-xl border p-6">
+          <p className="font-medium">Get the next one in your inbox</p>
+          <SubscribeForm slug={publication.slug} />
+        </aside>
+      </article>
+    </Brand>
   );
 }

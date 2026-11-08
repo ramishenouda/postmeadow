@@ -26,7 +26,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ImageDialog } from "./image-dialog";
 import { LinkPopover } from "./link-popover";
 
 const noopSubscribe = () => () => {};
@@ -43,10 +42,15 @@ export function Toolbar({
   editor,
   linkOpen,
   onLinkOpenChange,
+  onImageClick,
+  uploading,
 }: {
   editor: Editor | null;
   linkOpen: boolean;
   onLinkOpenChange: (open: boolean) => void;
+  onImageClick: () => void;
+  /** Number of images currently uploading. */
+  uploading: number;
 }) {
   // Subscribe only to what the toolbar shows, instead of re-rendering on every keystroke.
   const state = useEditorState({
@@ -187,10 +191,7 @@ export function Toolbar({
       />
       <Divider />
 
-      <ImageDialog
-        editor={editor}
-        trigger={<Btn icon={ImagePlus} label="Image" disabled={disabled} />}
-      />
+      <Btn icon={ImagePlus} label="Image" disabled={disabled} onClick={onImageClick} />
       <Btn
         icon={Minus}
         label="Divider"
@@ -223,6 +224,16 @@ export function Toolbar({
           <Btn icon={Columns3} label="Delete column" onClick={() => chain().deleteColumn().run()} />
           <Btn icon={Trash2} label="Delete table" onClick={() => chain().deleteTable().run()} />
         </>
+      ) : null}
+
+      {uploading > 0 ? (
+        <span
+          className="text-muted-foreground ml-auto flex items-center gap-2 px-2 text-xs"
+          role="status"
+        >
+          <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          Uploading {uploading === 1 ? "image" : `${uploading} images`}…
+        </span>
       ) : null}
     </div>
   );

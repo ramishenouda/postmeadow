@@ -13,6 +13,8 @@ const schema = z
     EMAIL_FROM: z.string().min(1),
     // Signing secret of the Resend webhook (whsec_…). Enables bounce/complaint handling.
     RESEND_WEBHOOK_SECRET: z.string().optional(),
+    // Directory for uploaded files (a persistent, backed-up volume in production).
+    STORAGE_DIR: z.string().default("./storage"),
     // Max confirmation emails per publication per hour (backstop against sign-up abuse).
     CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: z.coerce.number().int().positive().default(300),
     // Trusted header carrying the client IP (e.g. x-real-ip). See src/lib/client-ip.ts.

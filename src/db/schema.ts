@@ -34,6 +34,10 @@ export const publications = pgTable(
     description: text("description"),
     fromName: text("from_name").notNull(),
     replyTo: text("reply_to"),
+    // Branding, applied to emails and the public pages.
+    logoUrl: text("logo_url"),
+    accentColor: text("accent_color"), // "#rrggbb"; null = default
+    fontStyle: text("font_style").notNull().default("sans"), // "sans" | "serif"
     ...timestamps,
   },
   (t) => [index("publications_owner_idx").on(t.ownerId)],
@@ -150,3 +154,37 @@ export const rateLimits = pgTable("rate_limits", {
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
   count: integer("count").notNull(),
 });
+
+// ─── Plans and storage ───────────────────────────────────────────────────────
+
+/**
+ * One row per account that isn't on the default free plan, or that has add-ons.
+ * Plan limits live in code (src/lib/plans.ts); Stripe ids will be added here.
+ */
+export const accountBilling = pgTable("account_billing", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  plan: text("plan").notNull().default("free"),
+  storageAddons: integer("storage_addons").notNull().default(0),
+  ...timestamps,
+});
+
+/** Uploaded images. Files live in storage under `key`; `bytes` counts toward the owner's quota. */
+export const images = pgTable(
+  "images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    key: text("key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    originalName: text("original_name"),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [index("images_owner_idx").on(t.ownerId)],
+);

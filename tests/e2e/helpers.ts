@@ -35,7 +35,7 @@ export const sql = postgres(DATABASE_URL, { max: 2, onnotice: () => {} });
 /** Empties every app table. Called at the start of each test file. */
 export async function resetDatabase() {
   await sql`truncate table "user", publications, subscribers, posts, deliveries,
-    webhook_events, rate_limits, verification restart identity cascade`;
+    webhook_events, rate_limits, verification, images, account_billing restart identity cascade`;
 }
 
 /** One value from the first row, as text (like `psql -tA`). */

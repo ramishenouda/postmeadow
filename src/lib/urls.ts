@@ -11,3 +11,5 @@ export const confirmUrl = (token: string) =>
 export const unsubscribePageUrl = (token: string) => absoluteUrl(`/unsubscribe/${token}`);
 /** RFC 8058 one-click endpoint (used in the List-Unsubscribe header). */
 export const unsubscribeOneClickUrl = (token: string) => absoluteUrl(`/api/unsubscribe/${token}`);
+/** Public URL of an uploaded file. Absolute, because emails need full URLs. */
+export const mediaUrl = (key: string) => absoluteUrl(`/media/${key}`);

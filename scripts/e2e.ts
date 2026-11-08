@@ -9,7 +9,7 @@
  *   npm run test:e2e -- tests/e2e/webhooks.test.ts
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { loadEnvConfig } from "@next/env";
 import postgres from "postgres";
@@ -19,6 +19,7 @@ const PORT = 3100;
 const TEST_DB = "newsletter_test";
 const MAILPIT = "http://localhost:8026";
 const CONFIRMATION_CAP = "20";
+const STORAGE_DIR = "./storage-test"; // uploads from tests; emptied on every run
 // A fixed, obviously-fake signing secret shared by the test server and the tests.
 const WEBHOOK_SECRET = `whsec_${Buffer.from("e2e-only-webhook-signing-secret!").toString("base64")}`;
 
@@ -45,6 +46,7 @@ const serverEnv: NodeJS.ProcessEnv = {
   RESEND_WEBHOOK_SECRET: WEBHOOK_SECRET,
   CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: CONFIRMATION_CAP,
   CLIENT_IP_HEADER: "", // tests send X-Forwarded-For to look like different visitors
+  STORAGE_DIR,
 };
 
 function run(cmd: string, cmdArgs: string[], env = process.env) {
@@ -95,6 +97,7 @@ async function main() {
     ]);
   }
   await ensureTestDatabase();
+  rmSync(STORAGE_DIR, { recursive: true, force: true });
   if (!skipBuild) run("npx", ["next", "build"], serverEnv);
 
   console.log(`\nStarting test server on :${PORT}`);
@@ -138,6 +141,7 @@ async function main() {
           E2E_DATABASE_URL: testUrl.toString(),
           E2E_RESEND_WEBHOOK_SECRET: WEBHOOK_SECRET,
           E2E_CONFIRMATION_CAP: CONFIRMATION_CAP,
+          E2E_STORAGE_DIR: STORAGE_DIR,
           E2E_ACTION_MANIFEST: `${ROOT}/.next/server/server-reference-manifest.json`,
         },
       },

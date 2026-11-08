@@ -6,6 +6,7 @@ import {
   Heading,
   Hr,
   Html,
+  Img,
   Link,
   Preview,
   Row,
@@ -23,10 +24,14 @@ export type NewsletterEmailProps = {
   preview: string;
   webUrl: string;
   unsubscribeUrl: string;
+  brand?: { logoUrl?: string | null; fontStyle?: string | null };
   children: ReactNode;
 };
 
-const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const fonts = {
+  sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+};
 
 export default function NewsletterEmail({
   publicationName,
@@ -36,8 +41,10 @@ export default function NewsletterEmail({
   preview,
   webUrl,
   unsubscribeUrl,
+  brand,
   children,
 }: NewsletterEmailProps) {
+  const font = brand?.fontStyle === "serif" ? fonts.serif : fonts.sans;
   return (
     <Html lang="en">
       <Head />
@@ -51,7 +58,16 @@ export default function NewsletterEmail({
                   href={publicationUrl}
                   style={{ color: "#1c1917", fontSize: "13px", fontWeight: 600 }}
                 >
-                  {publicationName}
+                  {brand?.logoUrl ? (
+                    <Img
+                      src={brand.logoUrl}
+                      alt={publicationName}
+                      height="40"
+                      style={{ display: "block", height: "40px", width: "auto", border: 0 }}
+                    />
+                  ) : (
+                    publicationName
+                  )}
                 </Link>
               </Column>
               <Column align="right">

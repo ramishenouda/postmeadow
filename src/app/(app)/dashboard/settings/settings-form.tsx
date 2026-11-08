@@ -1,14 +1,25 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { uploadImage } from "@/components/editor/upload";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { accentIsReadable, contrastRatio, DEFAULT_ACCENT, HEX_COLOR } from "@/lib/color";
+import { cn } from "@/lib/utils";
 import { updateSettings, type SettingsState } from "./actions";
 
-type Values = { name: string; description: string; fromName: string; replyTo: string };
+type Values = {
+  name: string;
+  description: string;
+  fromName: string;
+  replyTo: string;
+  logoUrl: string;
+  accentColor: string;
+  fontStyle: string;
+};
 
 export function SettingsForm({ address, values }: { address: string; values: Values }) {
   const [state, formAction, pending] = useActionState<SettingsState, FormData>(updateSettings, {});
@@ -16,10 +27,13 @@ export function SettingsForm({ address, values }: { address: string; values: Val
   const v = { ...values, ...state.values };
 
   return (
-    <Card>
-      <CardContent>
-        {/* key: re-mount with fresh defaults after the server data changes */}
-        <form action={formAction} className="space-y-6" key={JSON.stringify(values)}>
+    // key: re-mount with fresh defaults after the server data changes
+    <form action={formAction} className="space-y-6" key={JSON.stringify(values)}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Publication</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <Field id="name" label="Name" error={errors.name}>
             <Input id="name" name="name" defaultValue={v.name} maxLength={80} required />
           </Field>
@@ -49,17 +63,189 @@ export function SettingsForm({ address, values }: { address: string; values: Val
               <Input id="replyTo" name="replyTo" type="email" defaultValue={v.replyTo} />
             </Field>
           </div>
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save changes"}
+        </CardContent>
+      </Card>
+
+      <Branding initial={v} errors={errors} />
+
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Save changes"}
+        </Button>
+        {state.ok ? (
+          <span className="text-muted-foreground text-sm" role="status">
+            Saved
+          </span>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
+function Branding({ initial, errors }: { initial: Values; errors: Record<string, string> }) {
+  const [logoUrl, setLogoUrl] = useState(initial.logoUrl);
+  const [accent, setAccent] = useState(initial.accentColor);
+  const [font, setFont] = useState(initial.fontStyle || "sans");
+  const [uploading, setUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const effectiveAccent = HEX_COLOR.test(accent) ? accent : DEFAULT_ACCENT;
+  const readable = !accent || accentIsReadable(accent);
+
+  const uploadLogo = async (file: File | undefined) => {
+    if (!file) return;
+    setLogoError(null);
+    setUploading(true);
+    try {
+      setLogoUrl((await uploadImage(file)).url);
+    } catch (e) {
+      setLogoError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Branding</CardTitle>
+        <CardDescription>Used in your emails and on your public pages.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <input type="hidden" name="logoUrl" value={logoUrl} />
+        <input type="hidden" name="accentColor" value={accent} />
+        <input type="hidden" name="fontStyle" value={font} />
+
+        <div className="space-y-2">
+          <Label>Logo</Label>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex h-14 min-w-28 items-center justify-center rounded-lg border bg-white px-3">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- uploaded logo
+                <img src={logoUrl} alt="Logo preview" className="max-h-10 w-auto" />
+              ) : (
+                <span className="text-muted-foreground text-xs">No logo</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              {uploading ? "Uploading…" : logoUrl ? "Replace" : "Upload logo"}
             </Button>
-            {state.ok ? (
-              <span className="text-muted-foreground text-sm" role="status">
-                Saved
-              </span>
+            {logoUrl ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setLogoUrl("")}>
+                Remove
+              </Button>
+            ) : null}
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => void uploadLogo(e.target.files?.[0])}
+            />
+          </div>
+          <p
+            className={cn(
+              "text-sm",
+              logoError || errors.logoUrl ? "text-destructive" : "text-muted-foreground",
+            )}
+            role={logoError || errors.logoUrl ? "alert" : undefined}
+          >
+            {logoError ??
+              errors.logoUrl ??
+              "Shown 40px tall at the top of emails. A wide PNG with a transparent background works best."}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="accent-hex">Accent colour</Label>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="color"
+              aria-label="Pick accent colour"
+              value={effectiveAccent}
+              onChange={(e) => setAccent(e.target.value)}
+              className="bg-background h-9 w-12 cursor-pointer rounded-md border p-1"
+            />
+            <Input
+              id="accent-hex"
+              value={accent}
+              onChange={(e) => setAccent(e.target.value.trim())}
+              placeholder={`${DEFAULT_ACCENT} (default)`}
+              className="h-9 w-40 font-mono"
+              aria-invalid={!readable || Boolean(errors.accentColor)}
+            />
+            {accent ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAccent("")}>
+                Use default
+              </Button>
             ) : null}
           </div>
-        </form>
+          {/* Live sample, so the writer sees exactly what readers get. */}
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-3 text-sm text-stone-800">
+            <span>
+              A sentence with{" "}
+              <span className="underline" style={{ color: effectiveAccent }}>
+                a link
+              </span>
+              .
+            </span>
+            <span
+              className="rounded-md px-3 py-1.5 font-medium text-white"
+              style={{ backgroundColor: effectiveAccent }}
+            >
+              Subscribe
+            </span>
+          </div>
+          <p
+            className={cn(
+              "text-sm",
+              readable && !errors.accentColor ? "text-muted-foreground" : "text-destructive",
+            )}
+          >
+            {errors.accentColor ??
+              (HEX_COLOR.test(accent) && !readable
+                ? `Too light to read on white (${contrastRatio(accent, "#ffffff").toFixed(1)}:1). Pick a darker colour.`
+                : "Used for links and buttons. It has to be readable on white.")}
+          </p>
+        </div>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Font</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["sans", "Sans-serif", "font-sans"],
+                ["serif", "Serif", "font-serif"],
+              ] as const
+            ).map(([value, label, cls]) => (
+              <label
+                key={value}
+                className={cn(
+                  "flex cursor-pointer flex-col gap-1 rounded-lg border p-3",
+                  font === value && "border-foreground ring-foreground ring-1",
+                )}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="radio"
+                    name="font-choice"
+                    checked={font === value}
+                    onChange={() => setFont(value)}
+                  />
+                  {label}
+                </span>
+                <span className={cn("text-lg", cls)}>The quick brown fox jumps.</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </CardContent>
     </Card>
   );

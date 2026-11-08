@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
+import { listImages, storageUsage } from "@/lib/images/service";
 import { SettingsForm } from "./settings-form";
+import { StorageSection } from "./storage-section";
 
 export const metadata: Metadata = { title: "Settings · Newsletter" };
 
@@ -18,6 +20,9 @@ export default function SettingsPage() {
       <Suspense fallback={<div className="bg-muted h-96 animate-pulse rounded-xl" />}>
         <Settings />
       </Suspense>
+      <Suspense fallback={<div className="bg-muted h-48 animate-pulse rounded-xl" />}>
+        <Storage />
+      </Suspense>
     </div>
   );
 }
@@ -32,7 +37,16 @@ async function Settings() {
         description: publication.description ?? "",
         fromName: publication.fromName,
         replyTo: publication.replyTo ?? "",
+        logoUrl: publication.logoUrl ?? "",
+        accentColor: publication.accentColor ?? "",
+        fontStyle: publication.fontStyle,
       }}
     />
   );
+}
+
+async function Storage() {
+  const { user } = await requirePublication();
+  const [usage, uploaded] = await Promise.all([storageUsage(user.id), listImages(user.id)]);
+  return <StorageSection usage={usage} images={uploaded} />;
 }

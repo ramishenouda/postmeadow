@@ -1,11 +1,13 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import { updateTag } from "next/cache";
+import { refresh, updateTag } from "next/cache";
 import { db } from "@/db";
 import { publications } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import { requirePublication } from "@/lib/dal";
+import { deleteImage, ownsImageUrl } from "@/lib/images/service";
+import { ImageError } from "@/lib/images/process";
 import { firstErrors, publicationSettingsSchema } from "@/lib/publication-schema";
 
 export type SettingsState = {
@@ -19,18 +21,41 @@ export async function updateSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const { publication } = await requirePublication();
+  const { user, publication } = await requirePublication();
   const raw = {
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? ""),
     fromName: String(formData.get("fromName") ?? ""),
     replyTo: String(formData.get("replyTo") ?? ""),
+    logoUrl: String(formData.get("logoUrl") ?? ""),
+    accentColor: String(formData.get("accentColor") ?? ""),
+    fontStyle: String(formData.get("fontStyle") ?? "sans"),
   };
   const parsed = publicationSettingsSchema.safeParse(raw);
   if (!parsed.success) return { errors: firstErrors(parsed.error), values: raw };
+  if (parsed.data.logoUrl && !(await ownsImageUrl(user.id, parsed.data.logoUrl))) {
+    return {
+      errors: { logoUrl: "Upload the logo here; links to other sites can't be used." },
+      values: raw,
+    };
+  }
 
   await db.update(publications).set(parsed.data).where(eq(publications.id, publication.id));
   // Public pages show the name and description.
   updateTag(publicationTag(publication.slug));
+  return { ok: true };
+}
+
+export type DeleteImageResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteUploadedImage(imageId: string): Promise<DeleteImageResult> {
+  const { user } = await requirePublication();
+  try {
+    await deleteImage(user.id, imageId);
+  } catch (error) {
+    if (error instanceof ImageError) return { ok: false, error: error.message };
+    throw error;
+  }
+  refresh();
   return { ok: true };
 }

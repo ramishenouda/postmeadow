@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { accentIsReadable, HEX_COLOR, MIN_ACCENT_CONTRAST } from "@/lib/color";
 import { RESERVED_SLUGS, SLUG_PATTERN } from "@/lib/slug";
 
 const optionalText = (max: number) =>
@@ -16,6 +17,20 @@ export const publicationSettingsSchema = z.object({
   replyTo: z
     .union([z.literal(""), z.email("Enter a valid email address")])
     .transform((v) => v || null),
+  // Branding. Optional so forms that don't show them (onboarding) still validate.
+  logoUrl: z
+    .union([z.literal(""), z.url()])
+    .optional()
+    .transform((v) => v || null),
+  accentColor: z
+    .union([z.literal(""), z.string().regex(HEX_COLOR, "Use a colour like #1d4ed8")])
+    .optional()
+    .transform((v) => (v ? v.toLowerCase() : null))
+    .refine(
+      (v) => v === null || accentIsReadable(v),
+      `Too light to read on white. Pick a darker colour (contrast of at least ${MIN_ACCENT_CONTRAST}:1).`,
+    ),
+  fontStyle: z.enum(["sans", "serif"]).optional().default("sans"),
 });
 
 /** Settings plus the address, which is chosen once at creation. */

@@ -1,9 +1,12 @@
 import type { AnyExtension } from "@tiptap/core";
+import FileHandler from "@tiptap/extension-file-handler";
 import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
+import { SlashCommand } from "./slash-command";
+import { ACCEPTED_IMAGE_TYPES } from "./upload";
 
 /**
  * Only formatting that survives a round trip through Markdown AND is supported
@@ -35,6 +38,29 @@ export function contentExtensions(): AnyExtension[] {
   ];
 }
 
+/**
+ * Events the editor dispatches on its DOM element for the surrounding React UI.
+ * (Simpler and safer than threading React callbacks into extensions created once.)
+ */
+export const IMAGE_FILES_EVENT = "editor:image-files"; // detail: { files: File[]; pos?: number }
+export const PICK_IMAGE_EVENT = "editor:pick-image";
+
 export function editorExtensions(placeholder: string): AnyExtension[] {
-  return [...contentExtensions(), Placeholder.configure({ placeholder }), CharacterCount];
+  return [
+    ...contentExtensions(),
+    Placeholder.configure({ placeholder }),
+    CharacterCount,
+    FileHandler.configure({
+      allowedMimeTypes: ACCEPTED_IMAGE_TYPES,
+      onDrop: (editor, files, pos) =>
+        editor.view.dom.dispatchEvent(
+          new CustomEvent(IMAGE_FILES_EVENT, { detail: { files, pos } }),
+        ),
+      onPaste: (editor, files) =>
+        editor.view.dom.dispatchEvent(new CustomEvent(IMAGE_FILES_EVENT, { detail: { files } })),
+    }),
+    SlashCommand.configure({
+      onPickImage: (editor) => editor.view.dom.dispatchEvent(new CustomEvent(PICK_IMAGE_EVENT)),
+    }),
+  ];
 }

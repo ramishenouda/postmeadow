@@ -49,7 +49,11 @@ export function SubscribeForm({ slug }: { slug: string }) {
           aria-hidden="true"
           className="hidden"
         />
-        <Button type="submit" className="h-10 px-4" disabled={pending}>
+        <Button
+          type="submit"
+          className="h-10 bg-(--accent) px-4 text-white hover:bg-(--accent)/90"
+          disabled={pending}
+        >
           {pending ? "Subscribing…" : "Subscribe"}
         </Button>
       </div>

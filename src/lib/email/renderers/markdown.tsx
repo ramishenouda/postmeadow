@@ -1,5 +1,5 @@
 import "server-only";
-import { emailMarkdownComponents } from "@/emails/components/markdown-email";
+import { createEmailMarkdownComponents } from "@/emails/components/markdown-email";
 import NewsletterEmail from "@/emails/newsletter";
 import { renderEmail } from "@/lib/email/render";
 import { parseMarkdown } from "@/lib/markdown/parse";
@@ -20,8 +20,12 @@ export const markdownRenderer: EmailRenderer = {
         preview={post.subtitle || markdownExcerpt(tree, 140)}
         webUrl={urls.webVersion}
         unsubscribeUrl={urls.unsubscribe}
+        brand={{ logoUrl: publication.logoUrl, fontStyle: publication.fontStyle }}
       >
-        {renderMarkdownTree(tree, emailMarkdownComponents)}
+        {renderMarkdownTree(
+          tree,
+          createEmailMarkdownComponents({ accent: publication.accentColor ?? undefined }),
+        )}
       </NewsletterEmail>,
     );
   },

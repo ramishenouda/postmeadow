@@ -63,6 +63,14 @@ pipeline only ever sees the finished HTML and text.
 - [x] **Rate limiting**: per-IP and per-publication limits on the subscribe form.
 - [x] **Tests in the repo + CI**: unit and end-to-end suites (`npm test`,
       `npm run test:e2e`) and a GitHub Actions workflow.
+- [x] **Writing experience**: image uploads (paste, drop, dialog) to our own storage,
+      `/` menu, floating selection toolbar.
+- [x] **Storage quotas**: per-account limits from plans (Free 500 MB / Pro 10 GB /
+      Business 50 GB, 10 GB add-ons), usage bar, image management.
+- [x] **Branding**: logo, accent colour (contrast-checked), sans/serif, in emails and
+      public pages.
+- [ ] **Billing**: Stripe Checkout for plans and storage add-ons, customer portal,
+      webhook to update `account_billing`.
 
 ## After the MVP
 
@@ -72,5 +80,5 @@ pipeline only ever sees the finished HTML and text.
 - Scheduled sends, and a real job queue for very large lists (sending currently
   runs in `after()` inside the web process)
 - Open and click tracking, bounce and complaint webhooks
-- Paid subscriptions (Stripe)
+- Paid subscriptions for readers (Stripe)
 - Multiple authors per publication, custom domains, RSS

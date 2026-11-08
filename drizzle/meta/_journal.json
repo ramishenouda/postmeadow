@@ -29,6 +29,13 @@
       "when": 1794099332549,
       "tag": "0003_bounces_and_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794101103022,
+      "tag": "0004_uploads_plans_branding",
+      "breakpoints": true
     }
   ]
 }

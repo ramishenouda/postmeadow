@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Editor } from "@tiptap/core";
 import { renderToStaticMarkup } from "react-dom/server";
-import { contentExtensions } from "../../src/components/editor/extensions";
+import { contentExtensions, editorExtensions } from "../../src/components/editor/extensions";
+import { filterSlashItems, slashItems } from "../../src/components/editor/slash-command";
 import { normalizeUrl } from "../../src/components/editor/link-popover";
 import { emailMarkdownComponents } from "../../src/emails/components/markdown-email";
 import { parseMarkdown } from "../../src/lib/markdown/parse";
@@ -146,4 +147,49 @@ const check = (name: string, ok: boolean, detail = "") => {
   const e = make("Hi <b>there</b>\n\n<script>alert(1)</script>");
   check("no <script> reaches the email", !emailHtml(e.getMarkdown()).includes("<script"));
   e.destroy();
+}
+
+// ─── Slash menu ─────────────────────────────────────────────────────────────
+
+{
+  const expected: Record<string, RegExp> = {
+    Heading: /^## Title$/,
+    Subheading: /^### Title$/,
+    "Bulleted list": /^- ?$/,
+    "Numbered list": /^1\. ?$/,
+    Quote: /^> ?$/,
+    Divider: /^---/,
+    "Code block": /^```\n?\n?```$/,
+    Table: /^\|.*\|\n\| *-+ *\|/,
+  };
+  let picked = 0;
+  const items = slashItems(() => picked++);
+
+  for (const item of items) {
+    test(`slash: ${item.title} replaces the typed "/query"`, () => {
+      // The editor with the full extension set, as in the app.
+      const e = new Editor({
+        extensions: editorExtensions("…"),
+        content: "/xyz",
+        contentType: "markdown",
+      });
+      item.run(e, { from: 1, to: 5 }); // the "/xyz" text
+      // Empty headings write no Markdown at all, so type into them like a writer would.
+      if (item.title.endsWith("eading")) e.commands.insertContent("Title");
+      const md = e.getMarkdown().trim();
+      assert.ok(!md.includes("/xyz"), `query not removed: ${md}`);
+      if (item.title === "Image") assert.equal(picked, 1, "image picker not opened");
+      else assert.match(md, expected[item.title], `${item.title} produced: ${JSON.stringify(md)}`);
+      e.destroy();
+    });
+  }
+
+  test("slash: filtering by title and keyword", () => {
+    const titles = (q: string) => filterSlashItems(items, q).map((i) => i.title);
+    assert.deepEqual(titles("h2"), ["Heading"]);
+    assert.deepEqual(titles("ol"), ["Numbered list"]);
+    assert.ok(titles("ima").includes("Image"));
+    assert.deepEqual(titles("zzz"), []);
+    assert.equal(titles("").length, items.length);
+  });
 }

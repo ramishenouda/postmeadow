@@ -2,3 +2,5 @@ drizzle/meta
 .next
 node_modules
 package-lock.json
+storage
+storage-test
