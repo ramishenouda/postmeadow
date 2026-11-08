@@ -1,4 +1,4 @@
-# Newsletter
+# Postmeadow
 
 A small newsletter publishing platform built with Next.js, Drizzle and Postgres.
 See [PLAN.md](PLAN.md) for the roadmap.

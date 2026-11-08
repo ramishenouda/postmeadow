@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { APP_NAME } from "@/lib/brand";
 import { Suspense } from "react";
 import { SignInForm } from "./sign-in-form";
 
-export const metadata: Metadata = { title: "Sign in · Newsletter" };
+export const metadata: Metadata = { title: "Sign in" };
 
 export default function SignInPage() {
   return (
@@ -11,7 +12,7 @@ export default function SignInPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-2 text-center">
           <Link href="/" className="text-sm font-semibold tracking-tight">
-            Newsletter
+            {APP_NAME}
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">Sign in or create an account</h1>
           <p className="text-muted-foreground text-sm">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Link expired · Newsletter" };
+export const metadata: Metadata = { title: "Link expired" };
 
 export default function SubscriptionInvalidPage() {
   return (

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_NAME } from "@/lib/brand";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,7 +8,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <footer className="text-muted-foreground border-t py-6 text-center text-xs">
         Published with{" "}
         <Link href="/" className="underline underline-offset-2">
-          Newsletter
+          {APP_NAME}
         </Link>
       </footer>
     </div>

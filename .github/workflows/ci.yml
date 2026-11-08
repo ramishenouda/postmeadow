@@ -19,7 +19,7 @@ jobs:
       APP_URL: http://localhost:3000
       DATABASE_URL: postgres://newsletter:newsletter@localhost:5433/newsletter
       BETTER_AUTH_SECRET: ci-only-auth-secret-not-used-anywhere-else
-      EMAIL_FROM: Newsletter <no-reply@localhost>
+      EMAIL_FROM: Postmeadow <no-reply@localhost>
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

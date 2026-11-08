@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_NAME } from "@/lib/brand";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/dal";
@@ -11,7 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="border-b">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
           <Link href="/dashboard" className="font-semibold tracking-tight">
-            Newsletter
+            {APP_NAME}
           </Link>
           {/* Reads the session, so it streams in without holding up the page. */}
           <Suspense fallback={<div className="bg-muted h-7 w-40 animate-pulse rounded" />}>

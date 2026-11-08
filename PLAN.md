@@ -1,4 +1,4 @@
-# Newsletter platform: build plan
+# Postmeadow: build plan
 
 A small publishing platform: writers create a publication, write posts, and
 email them to confirmed subscribers. Readers subscribe, confirm, read the web

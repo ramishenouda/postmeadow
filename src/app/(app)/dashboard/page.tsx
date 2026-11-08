@@ -13,7 +13,7 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createPost } from "./posts/actions";
 
-export const metadata: Metadata = { title: "Dashboard · Newsletter" };
+export const metadata: Metadata = { title: "Dashboard" };
 
 export default function DashboardPage() {
   return (

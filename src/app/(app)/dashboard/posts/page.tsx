@@ -10,7 +10,7 @@ import { requirePublication } from "@/lib/dal";
 import { formatDate } from "@/lib/format";
 import { createPost } from "./actions";
 
-export const metadata: Metadata = { title: "Posts · Newsletter" };
+export const metadata: Metadata = { title: "Posts" };
 
 export default function PostsPage() {
   return (

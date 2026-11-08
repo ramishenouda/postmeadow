@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ImportForm } from "./import-form";
 
-export const metadata: Metadata = { title: "Import subscribers · Newsletter" };
+export const metadata: Metadata = { title: "Import subscribers" };
 
 export default function ImportPage() {
   return (

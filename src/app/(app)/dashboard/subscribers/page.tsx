@@ -20,7 +20,7 @@ import { formatDate } from "@/lib/format";
 import { AddSubscriberForm } from "./add-subscriber-form";
 import { RemoveSubscriberButton } from "./remove-subscriber-button";
 
-export const metadata: Metadata = { title: "Subscribers · Newsletter" };
+export const metadata: Metadata = { title: "Subscribers" };
 
 const PAGE_SIZE = 50;
 type Status = (typeof subscriberStatus.enumValues)[number];

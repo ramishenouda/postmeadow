@@ -5,7 +5,7 @@ import { env } from "@/env";
 import { getPublicationForUser, requireUser } from "@/lib/dal";
 import { OnboardingForm } from "./onboarding-form";
 
-export const metadata: Metadata = { title: "Create your publication · Newsletter" };
+export const metadata: Metadata = { title: "Create your publication" };
 
 export default function OnboardingPage() {
   return (

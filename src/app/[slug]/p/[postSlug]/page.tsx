@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   ]);
   if (!publication || !post) return { title: "Not found" };
   return {
-    title: `${post.title} · ${publication.name}`,
+    title: { absolute: `${post.title} · ${publication.name}` },
     description: post.subtitle || markdownExcerpt(parseMarkdown(post.content), 160),
   };
 }

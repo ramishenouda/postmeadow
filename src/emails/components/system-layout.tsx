@@ -1,5 +1,6 @@
 import { Body, Container, Head, Hr, Html, Preview, Section, Text } from "@react-email/components";
 import type { ReactNode } from "react";
+import { APP_NAME } from "@/lib/brand";
 
 const styles = {
   body: {
@@ -38,7 +39,7 @@ export function SystemLayout({
       <Preview>{preview}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
-          <Text style={styles.brand}>Newsletter</Text>
+          <Text style={styles.brand}>{APP_NAME}</Text>
           <Section>{children}</Section>
           {footer ? (
             <>

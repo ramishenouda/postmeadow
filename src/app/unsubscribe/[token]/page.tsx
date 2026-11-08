@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { findByUnsubscribeToken } from "@/lib/subscribers";
 import { unsubscribe } from "./actions";
 
-export const metadata: Metadata = { title: "Unsubscribe · Newsletter", robots: { index: false } };
+export const metadata: Metadata = { title: "Unsubscribe", robots: { index: false } };
 
 type Props = PageProps<"/unsubscribe/[token]">;
 

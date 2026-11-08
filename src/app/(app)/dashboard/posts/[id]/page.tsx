@@ -17,7 +17,7 @@ import { AutoRefresh } from "./auto-refresh";
 import { PostEditor } from "./post-editor";
 import { ResumeButton } from "./resume-button";
 
-export const metadata: Metadata = { title: "Post · Newsletter" };
+export const metadata: Metadata = { title: "Post" };
 
 type Props = PageProps<"/dashboard/posts/[id]">;
 

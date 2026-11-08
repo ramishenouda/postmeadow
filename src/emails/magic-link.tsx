@@ -1,4 +1,5 @@
 import { Button, Heading, Link, Text } from "@react-email/components";
+import { APP_NAME } from "@/lib/brand";
 import { SystemLayout } from "./components/system-layout";
 
 export type MagicLinkEmailProps = {
@@ -13,7 +14,7 @@ export default function MagicLinkEmail({ url, expiresInMinutes }: MagicLinkEmail
       footer="If you didn't request this email, you can safely ignore it."
     >
       <Heading as="h1" style={{ color: "#1c1917", fontSize: "22px", margin: "0 0 16px" }}>
-        Sign in to Newsletter
+        Sign in to {APP_NAME}
       </Heading>
       <Text style={{ color: "#44403c", fontSize: "15px", lineHeight: "24px" }}>
         Click the button below to sign in. The link expires in {expiresInMinutes} minutes and can

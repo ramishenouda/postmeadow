@@ -6,7 +6,7 @@ import { listImages, storageUsage } from "@/lib/images/service";
 import { SettingsForm } from "./settings-form";
 import { StorageSection } from "./storage-section";
 
-export const metadata: Metadata = { title: "Settings · Newsletter" };
+export const metadata: Metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   return (

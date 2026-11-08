@@ -6,6 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { db, schema } from "@/db";
 import { env } from "@/env";
+import { APP_NAME } from "@/lib/brand";
 import MagicLinkEmail from "@/emails/magic-link";
 import { renderEmail } from "@/lib/email/render";
 import { sendEmail } from "@/lib/email/send";
@@ -28,7 +29,7 @@ export const auth = betterAuth({
         const { html, text } = await renderEmail(
           createElement(MagicLinkEmail, { url, expiresInMinutes: MAGIC_LINK_TTL_MINUTES }),
         );
-        await sendEmail({ to: email, subject: "Your sign-in link", html, text });
+        await sendEmail({ to: email, subject: `Your ${APP_NAME} sign-in link`, html, text });
       },
     }),
     // Must be last: lets server actions set auth cookies.

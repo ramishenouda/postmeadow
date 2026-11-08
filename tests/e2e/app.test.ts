@@ -97,6 +97,13 @@ describe("public page and double opt-in", () => {
     assert.match(html, /No posts yet/);
   });
 
+  test("app pages carry the Postmeadow name; publication pages carry only the writer's", async () => {
+    assert.match(await owner.page("/dashboard"), /<title>Dashboard · Postmeadow<\/title>/);
+    const html = await new Client().page(`/${SLUG}`);
+    assert.match(html, /<title>The Weekly Byte<\/title>/);
+    assert.match(html, /Published with<!-- --> <a[^>]*>Postmeadow<\/a>/);
+  });
+
   test("unknown publication shows not found", async () => {
     assert.match(await new Client().page("/does-not-exist"), /Page not found/);
   });

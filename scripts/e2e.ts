@@ -42,7 +42,7 @@ const serverEnv: NodeJS.ProcessEnv = {
   EMAIL_TRANSPORT: "smtp",
   SMTP_HOST: "localhost",
   SMTP_PORT: "1026",
-  EMAIL_FROM: "Newsletter <no-reply@localhost>",
+  EMAIL_FROM: "Postmeadow <no-reply@localhost>",
   RESEND_WEBHOOK_SECRET: WEBHOOK_SECRET,
   CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: CONFIRMATION_CAP,
   CLIENT_IP_HEADER: "", // tests send X-Forwarded-For to look like different visitors

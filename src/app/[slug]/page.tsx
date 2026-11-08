@@ -11,7 +11,10 @@ export async function generateMetadata({ params }: PageProps<"/[slug]">): Promis
   const { slug } = await params;
   const publication = await getPublicPublication(slug);
   if (!publication) return { title: "Not found" };
-  return { title: publication.name, description: publication.description ?? undefined };
+  return {
+    title: { absolute: publication.name },
+    description: publication.description ?? undefined,
+  };
 }
 
 export default function PublicationPage({ params }: PageProps<"/[slug]">) {
