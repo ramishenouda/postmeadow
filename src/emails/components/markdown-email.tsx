@@ -28,7 +28,12 @@ const cell = (align: string | null, header: boolean): CSSProperties => ({
 /** Components for a publication's brand. `accent` colours links. */
 export function createEmailMarkdownComponents({
   accent = DEFAULT_ACCENT,
-}: { accent?: string } = {}): MarkdownComponents {
+  accentHeadings = false,
+}: {
+  accent?: string;
+  /** Headings in the accent colour (the Magazine design). */
+  accentHeadings?: boolean;
+} = {}): MarkdownComponents {
   return {
     paragraph: ({ children }) => (
       <Text style={{ color: color.text, fontSize: "16px", lineHeight: "26px", margin: "0 0 16px" }}>
@@ -39,7 +44,7 @@ export function createEmailMarkdownComponents({
       <Heading
         as={`h${level}`}
         style={{
-          color: color.text,
+          color: accentHeadings ? accent : color.text,
           fontSize: headingSizes[level],
           lineHeight: 1.3,
           margin: "28px 0 12px",

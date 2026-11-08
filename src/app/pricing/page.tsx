@@ -16,7 +16,7 @@ export default function PricingPage() {
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-16">
         <div className="mx-auto max-w-2xl space-y-3 text-center">
-          <h1 className="text-4xl font-semibold tracking-tight">Pricing</h1>
+          <h1 className="font-display text-5xl font-semibold tracking-tight">Pricing</h1>
           <p className="text-muted-foreground text-lg">
             Every feature on every plan. Pay only when you need more storage.
           </p>
@@ -25,7 +25,7 @@ export default function PricingPage() {
           <PricingTable />
         </div>
         <div className="mx-auto mt-20 max-w-3xl">
-          <h2 className="mb-6 text-2xl font-semibold tracking-tight">Questions</h2>
+          <h2 className="font-display mb-6 text-3xl font-semibold tracking-tight">Questions</h2>
           <Faq />
         </div>
       </main>

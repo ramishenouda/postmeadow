@@ -43,6 +43,8 @@ export const publications = pgTable(
     // Welcome email sent when someone confirms. Null message = the default text.
     welcomeEnabled: boolean("welcome_enabled").notNull().default(true),
     welcomeMessage: text("welcome_message"),
+    // Email layout for every issue: classic | minimal | letter | magazine (src/lib/email-designs.ts)
+    emailDesign: text("email_design").notNull().default("classic"),
     ...timestamps,
   },
   (t) => [index("publications_owner_idx").on(t.ownerId)],
@@ -231,4 +233,22 @@ export const deliveryLinkClicks = pgTable(
     clicks: integer("clicks").notNull().default(1),
   },
   (t) => [primaryKey({ columns: [t.deliveryId, t.url] })],
+);
+
+/** A writer's saved post templates ("Save as template" in the editor). */
+export const postTemplates = pgTable(
+  "post_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicationId: uuid("publication_id")
+      .notNull()
+      .references(() => publications.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    title: text("title").notNull().default(""),
+    subtitle: text("subtitle"),
+    contentFormat: text("content_format").notNull().default("markdown"),
+    content: text("content").notNull().default(""),
+    ...timestamps,
+  },
+  (t) => [index("post_templates_publication_idx").on(t.publicationId)],
 );

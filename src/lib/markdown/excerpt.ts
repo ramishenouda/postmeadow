@@ -23,3 +23,31 @@ export function markdownExcerpt(root: Root, maxLength: number): string {
   const joined = parts.join(" ");
   return joined.length > maxLength ? `${joined.slice(0, maxLength - 1).trimEnd()}…` : joined;
 }
+
+/** The first image in the document, for archive thumbnails. */
+export function firstImage(root: Root): { url: string; alt: string } | null {
+  const visit = (node: Nodes): { url: string; alt: string } | null => {
+    if (node.type === "image") return { url: node.url, alt: node.alt ?? "" };
+    if ("children" in node) {
+      for (const child of node.children) {
+        const found = visit(child as Nodes);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  return visit(root);
+}
+
+/** Estimated minutes to read, at about 230 words a minute. Never less than 1. */
+export function readingMinutes(root: Root): number {
+  let words = 0;
+  const visit = (node: Nodes) => {
+    if ("value" in node && typeof node.value === "string" && node.type !== "html") {
+      words += node.value.split(/\s+/).filter(Boolean).length;
+    }
+    if ("children" in node) for (const child of node.children) visit(child as Nodes);
+  };
+  visit(root);
+  return Math.max(1, Math.round(words / 230));
+}

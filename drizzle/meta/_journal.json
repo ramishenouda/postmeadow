@@ -50,6 +50,13 @@
       "when": 1794169344844,
       "tag": "0006_schedule_unpublish",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794171811711,
+      "tag": "0007_email_designs_templates",
+      "breakpoints": true
     }
   ]
 }

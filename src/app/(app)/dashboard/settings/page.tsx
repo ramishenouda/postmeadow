@@ -51,6 +51,7 @@ async function Settings() {
         fontStyle: publication.fontStyle,
         welcomeEnabled: publication.welcomeEnabled ? "on" : "",
         welcomeMessage: publication.welcomeMessage ?? "",
+        emailDesign: publication.emailDesign,
       }}
     />
   );

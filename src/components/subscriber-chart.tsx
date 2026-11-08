@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Point = { day: string; total: number; gained: number; lost: number };
 
-const SERIES = "#2a78d6"; // categorical slot 1 (validated vs the light surface)
+const SERIES = "#047857"; // brand green (emerald-700), validated vs the light surface
 const SURFACE = "#ffffff";
 const GRID = "#e7e5e4";
 const INK_SECONDARY = "#57534e";

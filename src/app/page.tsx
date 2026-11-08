@@ -1,4 +1,5 @@
 import {
+  Check,
   ChartNoAxesColumn,
   ImagePlus,
   Inbox,
@@ -11,7 +12,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Faq } from "@/components/marketing/faq";
 import { PricingTable } from "@/components/marketing/pricing-table";
-import { Mark, SiteFooter, SiteHeader } from "@/components/marketing/site-chrome";
+import { Mark, Meadow, SiteFooter, SiteHeader } from "@/components/marketing/site-chrome";
 import { buttonVariants } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
@@ -68,56 +69,72 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="to-background bg-gradient-to-b from-emerald-50/80">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-20 lg:grid-cols-2 lg:py-28">
-            <div className="space-y-6">
-              <p className="bg-background text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
-                <Mark className="size-4" /> Free to start, no card needed
+        <section className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-emerald-50/60 to-lime-50/40">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-amber-100/70 blur-3xl"
+          />
+          <div className="relative mx-auto grid w-full max-w-6xl items-center gap-14 px-4 pt-16 pb-10 lg:grid-cols-[1.1fr_1fr] lg:pt-24 lg:pb-16">
+            <div className="space-y-7">
+              <p className="bg-background/80 text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm">
+                <span className="size-1.5 rounded-full bg-emerald-500" /> Free to start, no card
+                needed
               </p>
-              <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-                A calm home for your newsletter.
+              <h1 className="font-display text-5xl leading-[1.05] font-semibold tracking-tight text-balance text-stone-900 sm:text-6xl">
+                A calm home for your <span className="text-primary italic">newsletter</span>.
               </h1>
-              <p className="text-muted-foreground max-w-xl text-lg">
+              <p className="max-w-xl text-lg leading-8 text-stone-600">
                 Write in a friendly editor, grow your list with a beautiful public page, and send
                 every issue straight to your readers&apos; inboxes.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/sign-in"
-                  className={cn(
-                    buttonVariants({ size: "lg" }),
-                    "h-11 bg-emerald-800 px-5 text-white hover:bg-emerald-900",
-                  )}
-                >
+                <Link href="/sign-in" className={cn(buttonVariants({ size: "lg" }), "h-11 px-5")}>
                   Start your newsletter
                 </Link>
                 <Link
                   href="/pricing"
-                  className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-11 px-5")}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "lg" }),
+                    "bg-background/70 h-11 px-5",
+                  )}
                 >
                   See pricing
                 </Link>
               </div>
+              <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-600">
+                {["Every feature on Free", "Your own public page", "Import your list"].map((t) => (
+                  <li key={t} className="flex items-center gap-1.5">
+                    <Check className="text-primary size-4" aria-hidden /> {t}
+                  </li>
+                ))}
+              </ul>
             </div>
             <EmailMock />
           </div>
+          <Meadow />
         </section>
 
         {/* Features */}
-        <section className="mx-auto w-full max-w-6xl px-4 py-20">
+        <section className="mx-auto w-full max-w-6xl px-4 py-24">
           <div className="max-w-2xl space-y-3">
-            <h2 className="text-3xl font-semibold tracking-tight">Everything a newsletter needs</h2>
-            <p className="text-muted-foreground">
+            <p className="text-primary text-sm font-medium">Everything included</p>
+            <h2 className="font-display text-4xl font-semibold tracking-tight text-balance">
+              Everything a newsletter needs
+            </h2>
+            <p className="text-muted-foreground text-lg">
               No plugins, no setup. Every plan, including Free, gets all of it.
             </p>
           </div>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="rounded-2xl border p-6">
-                <span className="flex size-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+              <div
+                key={title}
+                className="group bg-card rounded-2xl border p-6 transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-900/5"
+              >
+                <span className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-50 to-lime-100 text-emerald-800 ring-1 ring-emerald-100">
                   <Icon className="size-5" aria-hidden />
                 </span>
-                <h3 className="mt-4 font-medium">{title}</h3>
+                <h3 className="font-display mt-5 text-lg font-semibold">{title}</h3>
                 <p className="text-muted-foreground mt-2 text-sm leading-6">{body}</p>
               </div>
             ))}
@@ -125,17 +142,20 @@ export default function Home() {
         </section>
 
         {/* How it works */}
-        <section className="bg-muted/30 border-y">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20">
-            <h2 className="text-3xl font-semibold tracking-tight">Up and running in minutes</h2>
-            <ol className="mt-10 grid gap-6 md:grid-cols-3">
+        <section className="border-y bg-stone-50">
+          <div className="mx-auto w-full max-w-6xl px-4 py-24">
+            <h2 className="font-display text-4xl font-semibold tracking-tight text-balance">
+              Up and running in minutes
+            </h2>
+            <ol className="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
               {STEPS.map((step, i) => (
-                <li key={step.title} className="space-y-2">
-                  <span className="flex size-8 items-center justify-center rounded-full bg-emerald-800 text-sm font-medium text-white">
-                    {i + 1}
+                <li key={step.title} className="relative space-y-3">
+                  <span className="font-display text-primary block text-5xl font-semibold">
+                    {String(i + 1).padStart(2, "0")}
                   </span>
-                  <h3 className="font-medium">{step.title}</h3>
-                  <p className="text-muted-foreground text-sm">{step.body}</p>
+                  <div className="h-px w-12 bg-emerald-300" />
+                  <h3 className="font-display text-xl font-semibold">{step.title}</h3>
+                  <p className="text-muted-foreground leading-7">{step.body}</p>
                 </li>
               ))}
             </ol>
@@ -143,32 +163,39 @@ export default function Home() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-16 px-4 py-20">
+        <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-24">
           <div className="mx-auto max-w-2xl space-y-3 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">Simple pricing</h2>
-            <p className="text-muted-foreground">
+            <p className="text-primary text-sm font-medium">Pricing</p>
+            <h2 className="font-display text-4xl font-semibold tracking-tight">Simple pricing</h2>
+            <p className="text-muted-foreground text-lg">
               Every feature on every plan. Pay only when you need more storage.
             </p>
           </div>
-          <div className="mt-10">
+          <div className="mt-12">
             <PricingTable />
           </div>
         </section>
 
         {/* FAQ */}
-        <section className="mx-auto w-full max-w-3xl px-4 pb-20">
-          <h2 className="mb-6 text-3xl font-semibold tracking-tight">Questions</h2>
+        <section className="mx-auto w-full max-w-3xl px-4 pb-24">
+          <h2 className="font-display mb-6 text-4xl font-semibold tracking-tight">Questions</h2>
           <Faq />
         </section>
 
         {/* Final call to action */}
-        <section className="bg-emerald-900 text-emerald-50">
-          <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-16 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold tracking-tight">
+        <section className="relative overflow-hidden bg-emerald-900 text-emerald-50">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-32 -left-20 size-96 rounded-full bg-emerald-600/30 blur-3xl"
+          />
+          <div className="relative mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-20 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
                 Your first issue is waiting.
               </h2>
-              <p className="text-emerald-100/80">Free forever. Upgrade when you outgrow it.</p>
+              <p className="text-lg text-emerald-100/80">
+                Free forever. Upgrade when you outgrow it.
+              </p>
             </div>
             <Link
               href="/sign-in"
@@ -191,27 +218,40 @@ export default function Home() {
 function EmailMock() {
   return (
     <div aria-hidden className="relative mx-auto w-full max-w-md">
-      <div className="absolute -inset-4 -z-10 rotate-2 rounded-3xl bg-emerald-200/40" />
-      <div className="rounded-2xl border bg-white p-6 shadow-xl">
-        <div className="flex items-center justify-between text-xs text-stone-500">
-          <span className="flex items-center gap-2 font-semibold text-stone-900">
-            <Mark className="size-5" /> The Weekly Meadow
+      <div className="absolute inset-0 translate-x-3 translate-y-3 rotate-2 rounded-3xl bg-emerald-200/50" />
+      <div className="relative overflow-hidden rounded-2xl border bg-white shadow-2xl shadow-emerald-900/10">
+        <div className="flex items-center gap-1.5 border-b bg-stone-50 px-4 py-2.5">
+          <span className="size-2.5 rounded-full bg-stone-300" />
+          <span className="size-2.5 rounded-full bg-stone-300" />
+          <span className="size-2.5 rounded-full bg-stone-300" />
+          <span className="ml-3 truncate text-xs text-stone-500">
+            From: Rami at The Weekly Meadow
           </span>
-          <span className="underline">View in browser</span>
         </div>
-        <h3 className="mt-6 font-serif text-2xl font-semibold text-stone-900">
-          Five small things worth your Sunday
-        </h3>
-        <p className="mt-1 text-stone-500">Issue #42 · 4 min read</p>
-        <div className="mt-5 aspect-[16/7] rounded-lg bg-gradient-to-br from-emerald-200 via-lime-100 to-amber-100" />
-        <div className="mt-5 space-y-2">
-          <div className="h-2.5 w-full rounded bg-stone-200" />
-          <div className="h-2.5 w-11/12 rounded bg-stone-200" />
-          <div className="h-2.5 w-4/5 rounded bg-stone-200" />
+        <div className="p-6">
+          <div className="flex items-center justify-between text-xs text-stone-500">
+            <span className="font-display flex items-center gap-2 text-sm font-semibold text-stone-900">
+              <Mark className="size-5" /> The Weekly Meadow
+            </span>
+            <span className="underline">View in browser</span>
+          </div>
+          <h3 className="font-display mt-6 text-2xl leading-tight font-semibold text-stone-900">
+            Five small things worth your Sunday
+          </h3>
+          <p className="mt-1 text-sm text-stone-500">Issue #42 · 4 min read</p>
+          <div className="relative mt-5 aspect-[16/7] overflow-hidden rounded-lg bg-gradient-to-br from-sky-100 via-emerald-50 to-amber-100">
+            <span className="absolute top-3 right-8 size-8 rounded-full bg-amber-200" />
+            <Meadow className="absolute inset-x-0 bottom-0 h-12 sm:h-14" />
+          </div>
+          <div className="mt-5 space-y-2">
+            <div className="h-2.5 w-full rounded bg-stone-200" />
+            <div className="h-2.5 w-11/12 rounded bg-stone-200" />
+            <div className="h-2.5 w-4/5 rounded bg-stone-200" />
+          </div>
+          <span className="bg-primary text-primary-foreground mt-6 inline-block rounded-md px-4 py-2 text-sm font-medium">
+            Read the full issue
+          </span>
         </div>
-        <span className="mt-6 inline-block rounded-md bg-emerald-800 px-4 py-2 text-sm font-medium text-white">
-          Read the full issue
-        </span>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { accentIsReadable, contrastRatio, DEFAULT_ACCENT, HEX_COLOR } from "@/li
 import { cn } from "@/lib/utils";
 import { DEFAULT_WELCOME_MESSAGE, MAX_WELCOME_MESSAGE } from "@/lib/welcome-default";
 import { updateSettings, type SettingsState } from "./actions";
+import { EmailDesignPicker } from "./email-design-picker";
 
 type Values = {
   name: string;
@@ -23,6 +24,7 @@ type Values = {
   /** "on" or "" (checkbox semantics, so it round-trips through the form). */
   welcomeEnabled: string;
   welcomeMessage: string;
+  emailDesign: string;
 };
 
 export function SettingsForm({ address, values }: { address: string; values: Values }) {
@@ -71,6 +73,12 @@ export function SettingsForm({ address, values }: { address: string; values: Val
       </Card>
 
       <Branding initial={v} errors={errors} />
+
+      <EmailDesignPicker
+        initial={v.emailDesign}
+        accent={HEX_COLOR.test(v.accentColor) ? v.accentColor : DEFAULT_ACCENT}
+        error={errors.emailDesign}
+      />
 
       <Card>
         <CardHeader>

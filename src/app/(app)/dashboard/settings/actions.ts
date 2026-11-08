@@ -10,6 +10,7 @@ import { deleteImage, ownsImageUrl } from "@/lib/images/service";
 import { ImageError } from "@/lib/images/process";
 import { firstErrors, publicationSettingsSchema } from "@/lib/publication-schema";
 import { MAX_WELCOME_MESSAGE } from "@/lib/welcome-default";
+import { isEmailDesign } from "@/lib/email-designs";
 
 export type SettingsState = {
   ok?: boolean;
@@ -33,6 +34,7 @@ export async function updateSettings(
     fontStyle: String(formData.get("fontStyle") ?? "sans"),
     welcomeEnabled: formData.get("welcomeEnabled") === "on" ? "on" : "",
     welcomeMessage: String(formData.get("welcomeMessage") ?? ""),
+    emailDesign: String(formData.get("emailDesign") ?? "classic"),
   };
   const parsed = publicationSettingsSchema.safeParse(raw);
   if (!parsed.success) return { errors: firstErrors(parsed.error), values: raw };
@@ -42,6 +44,9 @@ export async function updateSettings(
       errors: { welcomeMessage: `Keep it under ${MAX_WELCOME_MESSAGE} characters.` },
       values: raw,
     };
+  }
+  if (!isEmailDesign(raw.emailDesign)) {
+    return { errors: { emailDesign: "Pick one of the designs." }, values: raw };
   }
   if (parsed.data.logoUrl && !(await ownsImageUrl(user.id, parsed.data.logoUrl))) {
     return {
@@ -56,6 +61,7 @@ export async function updateSettings(
       ...parsed.data,
       welcomeEnabled: raw.welcomeEnabled === "on",
       welcomeMessage: welcomeMessage || null,
+      emailDesign: raw.emailDesign,
     })
     .where(eq(publications.id, publication.id));
   // Public pages show the name and description.

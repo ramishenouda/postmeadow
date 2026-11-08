@@ -4,16 +4,14 @@ import { Suspense } from "react";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { StatusBadge } from "@/components/status-badge";
 import { SubscriberChart } from "@/components/subscriber-chart";
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { db } from "@/db";
 import { deliveries, posts, subscribers } from "@/db/schema";
 import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { subscriberGrowth } from "@/lib/growth";
 import { cn } from "@/lib/utils";
-import { createPost } from "./posts/actions";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -47,6 +45,7 @@ async function Dashboard() {
         title: posts.title,
         status: posts.status,
         publishedAt: posts.publishedAt,
+        scheduledAt: posts.scheduledAt,
         updatedAt: posts.updatedAt,
         delivered: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = posts.id and d.status = 'sent')`,
       })
@@ -94,7 +93,7 @@ async function Dashboard() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{publication.name}</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">{publication.name}</h1>
           <Link
             href={`/${publication.slug}`}
             className="text-muted-foreground text-sm hover:underline"
@@ -103,12 +102,12 @@ async function Dashboard() {
             {publicUrl.pathname} ↗
           </Link>
         </div>
-        <form action={createPost}>
-          <Button type="submit">New post</Button>
-        </form>
+        <Link href="/dashboard/posts/new" className={buttonVariants()}>
+          New post
+        </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Stat label="Subscribers" value={active.n} href="/dashboard/subscribers?status=active" />
         <Stat
           label="Awaiting confirmation"
@@ -185,7 +184,9 @@ async function Dashboard() {
                     <p className="text-muted-foreground text-xs">
                       {post.status === "draft"
                         ? `Edited ${formatDate(post.updatedAt)}`
-                        : `${formatDate(post.publishedAt)} · ${post.delivered.toLocaleString("en")} delivered`}
+                        : post.status === "scheduled"
+                          ? `Scheduled for ${formatDateTime(post.scheduledAt)}`
+                          : `${formatDate(post.publishedAt)} · ${post.delivered.toLocaleString("en")} delivered`}
                     </p>
                   </div>
                   <StatusBadge status={post.status} />
@@ -201,13 +202,14 @@ async function Dashboard() {
 
 function Stat({ label, value, href }: { label: string; value: number; href: string }) {
   return (
-    <Link href={href} className="hover:bg-muted/40 rounded-xl transition-colors">
-      <Card className="bg-transparent">
-        <CardHeader>
-          <CardDescription>{label}</CardDescription>
-          <CardTitle className="text-3xl tabular-nums">{value.toLocaleString("en")}</CardTitle>
-        </CardHeader>
-      </Card>
+    <Link
+      href={href}
+      className="bg-card hover:border-primary/30 rounded-xl border p-3 transition-colors hover:shadow-sm sm:p-5"
+    >
+      <p className="text-muted-foreground text-xs sm:text-sm">{label}</p>
+      <p className="font-display mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
+        {value.toLocaleString("en")}
+      </p>
     </Link>
   );
 }
@@ -216,9 +218,9 @@ function DashboardSkeleton() {
   return (
     <div className="space-y-8" aria-busy="true">
       <div className="bg-muted h-12 w-72 animate-pulse rounded" />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="bg-muted h-28 animate-pulse rounded-xl" />
+          <div key={i} className="bg-muted h-20 animate-pulse rounded-xl sm:h-28" />
         ))}
       </div>
       <div className="bg-muted h-48 animate-pulse rounded-xl" />

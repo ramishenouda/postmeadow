@@ -10,6 +10,11 @@ See [PLAN.md](PLAN.md) for the roadmap.
   drop, tables) with a live preview of the real email, send themselves a test, then send to everyone.
 - **Branding:** a logo, an accent colour (checked for readability) and a sans or serif font,
   applied to emails and public pages.
+- **Email designs:** four layouts for every issue (Classic, Minimal, Letter, Magazine), picked
+  in Settings and combined with the branding (`src/emails/newsletter.tsx`).
+- **Templates:** "New post" starts from blank, one of five starter templates (weekly roundup,
+  announcement, personal letter, link digest, interview; `src/lib/post-templates.ts`) or a
+  template you saved from any post with "Save as template".
 - **Storage:** uploads live on our own server; each account has a quota from its plan, with a
   usage bar and image management in Settings.
 - **Readers** subscribe on the publication's page (`/{slug}`), confirm by email (double

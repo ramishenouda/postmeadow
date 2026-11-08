@@ -43,11 +43,11 @@ export function PricingTable() {
               key={id}
               className={cn(
                 "bg-background flex flex-col rounded-2xl border p-6",
-                featured && "border-emerald-700 shadow-lg ring-1 ring-emerald-700",
+                featured && "border-primary ring-primary shadow-lg ring-1 shadow-emerald-900/10",
               )}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{PLANS[id].name}</h3>
+                <h3 className="font-display text-xl font-semibold">{PLANS[id].name}</h3>
                 {featured ? (
                   <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
                     Most popular
@@ -56,7 +56,7 @@ export function PricingTable() {
               </div>
               <p className="text-muted-foreground mt-1 text-sm">{PLANS[id].tagline}</p>
               <p className="mt-6">
-                <span className="text-4xl font-semibold tracking-tight">
+                <span className="font-display text-4xl font-semibold tracking-tight">
                   {id === "free" ? "$0" : formatPrice(PRICES[id][interval])}
                 </span>
                 <span className="text-muted-foreground text-sm">
@@ -84,7 +84,6 @@ export function PricingTable() {
                 className={cn(
                   buttonVariants({ variant: featured ? "default" : "outline", size: "lg" }),
                   "mt-6 w-full",
-                  featured && "bg-emerald-800 text-white hover:bg-emerald-900",
                 )}
               >
                 {id === "free" ? "Start free" : `Start with ${PLANS[id].name}`}
@@ -94,7 +93,7 @@ export function PricingTable() {
         })}
       </div>
       <div className="bg-muted/30 rounded-2xl border p-6">
-        <h3 className="font-medium">Every plan includes</h3>
+        <h3 className="font-display text-lg font-semibold">Every plan includes</h3>
         <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
           {INCLUDED.map((f) => (
             <Feature key={f}>{f}</Feature>

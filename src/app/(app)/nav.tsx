@@ -35,7 +35,7 @@ export function NavLinks({ pathname }: { pathname?: string }) {
             className={cn(
               "border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors",
               active
-                ? "border-foreground text-foreground font-medium"
+                ? "border-primary text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground border-transparent",
             )}
           >

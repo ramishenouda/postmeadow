@@ -101,7 +101,7 @@ describe("public page and double opt-in", () => {
     assert.match(await owner.page("/dashboard"), /<title>Dashboard · Postmeadow<\/title>/);
     const html = await new Client().page(`/${SLUG}`);
     assert.match(html, /<title>The Weekly Byte<\/title>/);
-    assert.match(html, /Published with<!-- --> <a[^>]*>Postmeadow<\/a>/);
+    assert.match(html, /Published with<!-- --> <span[^>]*>Postmeadow<\/span><\/a>/);
   });
 
   test("unknown publication shows not found", async () => {

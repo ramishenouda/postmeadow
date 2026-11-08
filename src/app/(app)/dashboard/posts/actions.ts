@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { posts, subscribers } from "@/db/schema";
+import { posts, postTemplates, subscribers } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import { requirePublication } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -14,21 +14,106 @@ import { getOwnedPost } from "@/lib/posts";
 import { processDeliveries, queuePost, sendTestEmail } from "@/lib/sending";
 import { SLUG_PATTERN } from "@/lib/slug";
 import { randomToken } from "@/lib/tokens";
+import { starterTemplate } from "@/lib/post-templates";
 
+const untitledSlug = () =>
+  `untitled-${randomToken()
+    .slice(0, 6)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "x")}`;
+
+/** A blank draft. */
 export async function createPost() {
+  return createPostFrom("blank");
+}
+
+/**
+ * Start a draft from "blank", a starter template ("starter:<id>") or one of this
+ * publication's saved templates ("saved:<uuid>").
+ */
+export async function createPostFrom(source: string) {
   const { publication } = await requirePublication();
+  let start = {
+    title: "",
+    subtitle: null as string | null,
+    content: "",
+    contentFormat: "markdown",
+  };
+
+  if (source.startsWith("starter:")) {
+    const template = starterTemplate(source.slice("starter:".length));
+    if (template) {
+      start = {
+        ...start,
+        title: template.title,
+        subtitle: template.subtitle || null,
+        content: template.content,
+      };
+    }
+  } else if (source.startsWith("saved:")) {
+    const id = source.slice("saved:".length);
+    const [template] = /^[0-9a-f-]{36}$/i.test(id)
+      ? await db
+          .select()
+          .from(postTemplates)
+          .where(and(eq(postTemplates.id, id), eq(postTemplates.publicationId, publication.id)))
+      : [];
+    if (template) {
+      start = {
+        title: template.title,
+        subtitle: template.subtitle,
+        content: template.content,
+        contentFormat: template.contentFormat,
+      };
+    }
+  }
+
   const [post] = await db
     .insert(posts)
-    .values({
-      publicationId: publication.id,
-      title: "",
-      slug: `untitled-${randomToken()
-        .slice(0, 6)
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "x")}`,
-    })
+    .values({ publicationId: publication.id, slug: untitledSlug(), ...start })
     .returning({ id: posts.id });
   redirect(`/dashboard/posts/${post.id}`);
+}
+
+const MAX_TEMPLATES = 50;
+
+/** Save a post's title, subtitle and content as a reusable template. */
+export async function saveAsTemplate(postId: string, name: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  const cleanName = name.trim().slice(0, 80);
+  if (!cleanName) return { ok: false, error: "Give the template a name." };
+
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(postTemplates)
+    .where(eq(postTemplates.publicationId, owned.publication.id));
+  if (n >= MAX_TEMPLATES) {
+    return { ok: false, error: `You can keep up to ${MAX_TEMPLATES} templates. Delete one first.` };
+  }
+
+  const { post } = owned;
+  await db.insert(postTemplates).values({
+    publicationId: owned.publication.id,
+    name: cleanName,
+    title: post.title,
+    subtitle: post.subtitle,
+    content: post.content,
+    contentFormat: post.contentFormat,
+  });
+  return { ok: true, message: `Saved as template “${cleanName}”. Find it under New post.` };
+}
+
+export async function deleteTemplate(templateId: string): Promise<ActionResult> {
+  const { publication } = await requirePublication();
+  if (!/^[0-9a-f-]{36}$/i.test(templateId)) return { ok: false, error: "Template not found." };
+  const deleted = await db
+    .delete(postTemplates)
+    .where(and(eq(postTemplates.id, templateId), eq(postTemplates.publicationId, publication.id)))
+    .returning({ id: postTemplates.id });
+  if (deleted.length === 0) return { ok: false, error: "Template not found." };
+  refresh();
+  return { ok: true, message: "Template deleted." };
 }
 
 const postInput = z.object({

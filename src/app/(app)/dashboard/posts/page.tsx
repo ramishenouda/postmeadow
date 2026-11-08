@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { desc, eq, sql } from "drizzle-orm";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { db } from "@/db";
 import { deliveries, posts } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { createPost } from "./actions";
 
 export const metadata: Metadata = { title: "Posts" };
 
@@ -20,9 +19,9 @@ export default function PostsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Posts</h1>
           <p className="text-muted-foreground text-sm">Drafts and everything you&apos;ve sent.</p>
         </div>
-        <form action={createPost}>
-          <Button type="submit">New post</Button>
-        </form>
+        <Link href="/dashboard/posts/new" className={buttonVariants()}>
+          New post
+        </Link>
       </div>
       <Suspense fallback={<div className="bg-muted h-64 animate-pulse rounded-xl" />}>
         <PostList />

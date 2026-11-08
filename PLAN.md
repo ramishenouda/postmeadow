@@ -80,6 +80,8 @@ pipeline only ever sees the finished HTML and text.
 - [ ] **Going live**: follow `deploy/README.md` on the server; Resend and Stripe in
       live mode; off-server backup copies; error monitoring.
 - [ ] **Before launch**: Free-plan sending limits (email cost scales with subscribers).
+- [x] **Email templates**: four email designs (Classic, Minimal, Letter, Magazine),
+      five starter post templates, and saved templates per publication.
 - [x] **What every competitor has**: scheduled sends (with an in-process scheduler
       that also resumes interrupted sends), embeddable signup forms, SEO basics
       (sitemap, robots, canonical), editing/unpublishing sent posts, growth chart.

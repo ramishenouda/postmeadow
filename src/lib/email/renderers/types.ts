@@ -17,6 +17,10 @@ export type RenderablePublication = {
   logoUrl?: string | null;
   accentColor?: string | null;
   fontStyle?: string | null;
+  /** Layout (src/lib/email-designs.ts). Unknown values fall back to "classic". */
+  emailDesign?: string | null;
+  /** Sender name, used by designs that sign off (Letter). */
+  fromName?: string | null;
 };
 
 export type RenderUrls = {

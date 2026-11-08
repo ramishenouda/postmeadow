@@ -1,9 +1,11 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { posts, publications } from "@/db/schema";
+import { posts, publications, subscribers } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
+import { firstImage, markdownExcerpt, readingMinutes } from "@/lib/markdown/excerpt";
+import { parseMarkdown } from "@/lib/markdown/parse";
 
 /**
  * Cached reads for public pages. Invalidate with publicationTag(slug) whenever a
@@ -36,21 +38,50 @@ export async function getPublicPublication(slug: string) {
   return publication ?? null;
 }
 
+/**
+ * The archive: every post on the web, newest first, with a short excerpt, the first
+ * image (as a thumbnail) and reading time. Content is parsed here, inside the cache,
+ * so the page never ships whole posts.
+ */
 export async function getPublishedPosts(slug: string) {
   "use cache";
   cacheTag(publicationTag(slug));
   cacheLife("minutes");
-  return db
+  const rows = await db
     .select({
       title: posts.title,
       subtitle: posts.subtitle,
       slug: posts.slug,
+      content: posts.content,
       publishedAt: posts.publishedAt,
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
     .where(and(eq(publications.slug, slug), eq(posts.status, "sent"), eq(posts.webHidden, false)))
     .orderBy(desc(posts.publishedAt));
+  return rows.map(({ content, ...post }) => {
+    const root = parseMarkdown(content);
+    return {
+      ...post,
+      excerpt: post.subtitle ? "" : markdownExcerpt(root, 180),
+      image: firstImage(root),
+      minutes: readingMinutes(root),
+    };
+  });
+}
+
+/**
+ * Active subscribers, for "Join N readers". Not invalidated on every signup: the
+ * short cache lifetime is fresh enough for a social-proof number.
+ */
+export async function getReaderCount(publicationId: string) {
+  "use cache";
+  cacheLife("minutes");
+  const [row] = await db
+    .select({ n: count() })
+    .from(subscribers)
+    .where(and(eq(subscribers.publicationId, publicationId), eq(subscribers.status, "active")));
+  return row?.n ?? 0;
 }
 
 /** The latest sent posts with their content, for the RSS feed. */

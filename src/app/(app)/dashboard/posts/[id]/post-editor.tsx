@@ -36,6 +36,7 @@ import {
   sendPost,
   sendTest,
   unschedulePost,
+  saveAsTemplate,
   type PostInput,
 } from "../actions";
 
@@ -200,22 +201,33 @@ export function PostEditor({
           </Link>
           <SaveIndicator state={save} />
         </div>
-        {sentMode ? null : (
-          <div className="flex flex-wrap items-center gap-2">
-            <DeleteButton postId={post.id} disabled={busy} />
-            <Button variant="outline" disabled={busy} onClick={() => run(() => sendTest(post.id))}>
-              Send test
-            </Button>
-            <SendDialog
-              title={title}
-              activeSubscribers={activeSubscribers}
-              scheduledAt={scheduledAt}
-              disabled={busy}
-              onSendNow={() => run(() => sendPost(post.id))}
-              onSchedule={(at) => run(() => schedulePost(post.id, at))}
-            />
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <SaveTemplateDialog
+            defaultName={title}
+            disabled={busy}
+            onSave={(name) => run(() => saveAsTemplate(post.id, name))}
+          />
+          {sentMode ? null : (
+            <>
+              <DeleteButton postId={post.id} disabled={busy} />
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => run(() => sendTest(post.id))}
+              >
+                Send test
+              </Button>
+              <SendDialog
+                title={title}
+                activeSubscribers={activeSubscribers}
+                scheduledAt={scheduledAt}
+                disabled={busy}
+                onSendNow={() => run(() => sendPost(post.id))}
+                onSchedule={(at) => run(() => schedulePost(post.id, at))}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {sentMode ? (
@@ -504,6 +516,65 @@ function SendDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Save this post's structure and words as a reusable template. */
+function SaveTemplateDialog({
+  defaultName,
+  disabled,
+  onSave,
+}: {
+  defaultName: string;
+  disabled: boolean;
+  onSave: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="ghost" disabled={disabled}>
+            Save as template
+          </Button>
+        }
+      />
+      <DialogContent>
+        {open ? (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = String(new FormData(e.currentTarget).get("name") ?? "");
+              setOpen(false);
+              onSave(name);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Save as template</DialogTitle>
+              <DialogDescription>
+                Saves the title, subtitle and text as they are now. Start new posts from it under
+                Posts → New post.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="template-name">Template name</Label>
+              <Input
+                id="template-name"
+                name="name"
+                defaultValue={defaultName || "My template"}
+                maxLength={80}
+                required
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit">Save template</Button>
+            </DialogFooter>
+          </form>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

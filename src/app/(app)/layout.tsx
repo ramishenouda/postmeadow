@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { APP_NAME } from "@/lib/brand";
 import { Suspense } from "react";
+import { Wordmark } from "@/components/marketing/site-chrome";
+import { APP_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/dal";
 import { signOut } from "./actions";
@@ -9,10 +10,10 @@ import { DashboardNav, NavLinks } from "./nav";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b">
+      <header className="bg-background border-b">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
-          <Link href="/dashboard" className="font-semibold tracking-tight">
-            {APP_NAME}
+          <Link href="/dashboard" aria-label={`${APP_NAME} dashboard`}>
+            <Wordmark size="sm" />
           </Link>
           {/* Reads the session, so it streams in without holding up the page. */}
           <Suspense fallback={<div className="bg-muted h-7 w-40 animate-pulse rounded" />}>
@@ -24,7 +25,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <DashboardNav />
         </Suspense>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+      <main className="[&_h1]:font-display mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+        {children}
+      </main>
     </div>
   );
 }
