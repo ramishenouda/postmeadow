@@ -8,12 +8,16 @@ import { publicationTag } from "@/lib/cache-tags";
 /**
  * Cached reads for public pages. Invalidate with publicationTag(slug) whenever a
  * post is sent or the publication's settings change.
+ *
+ * The lifetime is deliberately short ("minutes"): tags make changes show up
+ * immediately, and the short lifetime bounds how long a page can stay stale if
+ * an invalidation is ever missed (seen once in testing, not reproducible).
  */
 
 export async function getPublicPublication(slug: string) {
   "use cache";
   cacheTag(publicationTag(slug));
-  cacheLife("hours");
+  cacheLife("minutes");
   const [publication] = await db
     .select({
       id: publications.id,
@@ -30,7 +34,7 @@ export async function getPublicPublication(slug: string) {
 export async function getPublishedPosts(slug: string) {
   "use cache";
   cacheTag(publicationTag(slug));
-  cacheLife("hours");
+  cacheLife("minutes");
   return db
     .select({
       title: posts.title,
@@ -47,7 +51,7 @@ export async function getPublishedPosts(slug: string) {
 export async function getPublishedPost(slug: string, postSlug: string) {
   "use cache";
   cacheTag(publicationTag(slug));
-  cacheLife("hours");
+  cacheLife("minutes");
   const [post] = await db
     .select({
       title: posts.title,

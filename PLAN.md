@@ -14,7 +14,7 @@ archive and unsubscribe in one click.
 | Auth           | Better Auth, magic link                        |
 | Email building | React Email                                    |
 | Email sending  | Mailpit (dev, SMTP) / Resend (prod)            |
-| Editor         | Markdown with live preview                     |
+| Editor         | Tiptap rich text, stored as Markdown           |
 | Validation     | Zod                                            |
 
 ## Data model
@@ -54,6 +54,16 @@ which keeps styles inline. The result is wrapped in `NewsletterEmail`
 (`src/lib/email/renderers/`), chosen by `posts.content_format`. The sending
 pipeline only ever sees the finished HTML and text.
 
+## Since the MVP
+
+- [x] **Rich-text editor**: Tiptap WYSIWYG with toolbar, link popover, image dialog,
+      tables and shortcuts. Posts are still stored as Markdown.
+- [x] **Bounces and complaints**: signed Resend webhook; hard bounces and suppressions
+      mark subscribers bounced, spam complaints unsubscribe them.
+- [x] **Rate limiting**: per-IP and per-publication limits on the subscribe form.
+- [x] **Tests in the repo + CI**: unit and end-to-end suites (`npm test`,
+      `npm run test:e2e`) and a GitHub Actions workflow.
+
 ## After the MVP
 
 - **Choice of email builders**: let users pick between builders, e.g. MJML,
@@ -61,8 +71,6 @@ pipeline only ever sees the finished HTML and text.
   supported by the `EmailRenderer` interface and `content_format` column.
 - Scheduled sends, and a real job queue for very large lists (sending currently
   runs in `after()` inside the web process)
-- Rate limiting on the public subscribe form by IP (today: honeypot + per-address
-  cooldown)
 - Open and click tracking, bounce and complaint webhooks
 - Paid subscriptions (Stripe)
 - Multiple authors per publication, custom domains, RSS

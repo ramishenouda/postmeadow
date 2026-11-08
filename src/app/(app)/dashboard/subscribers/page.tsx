@@ -167,6 +167,14 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
                   <TableCell className="font-medium">{s.email}</TableCell>
                   <TableCell>
                     <StatusBadge status={s.status} />
+                    {s.statusReason ? (
+                      <p
+                        className="text-muted-foreground mt-1 max-w-xs truncate text-xs"
+                        title={s.statusReason}
+                      >
+                        {s.statusReason}
+                      </p>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden sm:table-cell">
                     {formatDate(s.createdAt)}

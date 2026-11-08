@@ -1,4 +1,13 @@
-import { pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, index } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
@@ -55,6 +64,8 @@ export const subscribers = pgTable(
     unsubscribeToken: text("unsubscribe_token").notNull().unique(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
+    // Why the status last changed when it wasn't the reader's own click, e.g. a hard bounce.
+    statusReason: text("status_reason"),
     ...timestamps,
   },
   (t) => [
@@ -96,6 +107,8 @@ export const deliveryStatus = pgEnum("delivery_status", [
   "sending", // claimed by a worker; guards against double sends
   "sent",
   "failed",
+  "bounced", // reported by the provider after sending
+  "complained", // the recipient marked it as spam
 ]);
 
 export const deliveries = pgTable(
@@ -119,3 +132,21 @@ export const deliveries = pgTable(
     index("deliveries_post_status_idx").on(t.postId, t.status),
   ],
 );
+
+// ─── Provider webhooks (idempotency) ──────────────────────────────────────────
+
+/** Every processed webhook delivery, so retries of the same event are ignored. */
+export const webhookEvents = pgTable("webhook_events", {
+  id: text("id").primaryKey(), // the provider's message id (svix-id / webhook-id)
+  type: text("type").notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Rate limiting ───────────────────────────────────────────────────────────
+
+/** Fixed-window counters, shared by every app instance through the database. */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+});

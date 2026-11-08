@@ -11,6 +11,17 @@ const schema = z
     SMTP_PORT: z.coerce.number().int().default(1025),
     RESEND_API_KEY: z.string().optional(),
     EMAIL_FROM: z.string().min(1),
+    // Signing secret of the Resend webhook (whsec_…). Enables bounce/complaint handling.
+    RESEND_WEBHOOK_SECRET: z.string().optional(),
+    // Max confirmation emails per publication per hour (backstop against sign-up abuse).
+    CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: z.coerce.number().int().positive().default(300),
+    // Trusted header carrying the client IP (e.g. x-real-ip). See src/lib/client-ip.ts.
+    CLIENT_IP_HEADER: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .optional()
+      .transform((v) => v || undefined),
   })
   .refine((e) => !e.BETTER_AUTH_SECRET.startsWith("change-me"), {
     message: "Replace the placeholder BETTER_AUTH_SECRET from .env.example",

@@ -22,6 +22,13 @@
       "when": 1794093601706,
       "tag": "0002_sending",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794099332549,
+      "tag": "0003_bounces_and_rate_limits",
+      "breakpoints": true
     }
   ]
 }

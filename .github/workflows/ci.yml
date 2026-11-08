@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Only used inside this job. The e2e script derives its own test database
+      # (newsletter_test) and test server settings from these.
+      APP_URL: http://localhost:3000
+      DATABASE_URL: postgres://newsletter:newsletter@localhost:5433/newsletter
+      BETTER_AUTH_SECRET: ci-only-auth-secret-not-used-anywhere-else
+      EMAIL_FROM: Newsletter <no-reply@localhost>
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Format
+        run: npx prettier --check .
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm run test:unit
+      - name: End-to-end tests (Postgres + Mailpit via docker compose, production build)
+        run: npm run test:e2e

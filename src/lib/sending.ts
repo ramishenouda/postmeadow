@@ -215,7 +215,15 @@ export async function deliveryStats(postId: string) {
     .from(deliveries)
     .where(eq(deliveries.postId, postId))
     .groupBy(deliveries.status);
-  const stats = { queued: 0, sending: 0, sent: 0, failed: 0, total: 0 };
+  const stats = {
+    queued: 0,
+    sending: 0,
+    sent: 0,
+    failed: 0,
+    bounced: 0,
+    complained: 0,
+    total: 0,
+  };
   for (const { status, n } of rows) {
     stats[status] = n;
     stats.total += n;

@@ -129,3 +129,26 @@
     @apply font-sans;
   }
 }
+
+/* ─── Rich-text editor (Tiptap) ─────────────────────────────────────────── */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+.tiptap img.ProseMirror-selectednode,
+.tiptap hr.ProseMirror-selectednode {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.tiptap table .selectedCell {
+  background: color-mix(in oklch, var(--ring) 15%, transparent);
+}
+.tiptap table td,
+.tiptap table th {
+  position: relative;
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.5rem;
+}

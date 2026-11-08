@@ -3,15 +3,25 @@ import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { createElement } from "react";
 import { z } from "zod";
 import { db } from "@/db";
+import { env } from "@/env";
 import { publications, subscribers } from "@/db/schema";
 import ConfirmSubscriptionEmail from "@/emails/confirm-subscription";
 import { renderEmail } from "@/lib/email/render";
+import { hit, RateLimitError } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email/send";
 import { randomToken } from "@/lib/tokens";
 import { confirmUrl } from "@/lib/urls";
 
 /** Don't send another confirmation to the same address more often than this. */
 const CONFIRM_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+/**
+ * Cap on confirmation emails per publication. Backstop for when per-IP limits are
+ * bypassed (spoofed or rotating IPs): it bounds how many strangers can be emailed.
+ */
+const CONFIRMATIONS_PER_PUBLICATION = {
+  limit: env.CONFIRMATIONS_PER_PUBLICATION_PER_HOUR,
+  windowSeconds: 60 * 60,
+};
 /** Confirmation links stop working after this. */
 const CONFIRM_TOKEN_TTL = "7 days";
 
@@ -43,13 +53,18 @@ export async function requestSubscription(publication: Publication, email: strin
     return;
   }
 
+  if (!(await hit(`subscribe:publication:${publication.id}`, CONFIRMATIONS_PER_PUBLICATION))) {
+    console.warn("confirmation cap reached", { publicationId: publication.id });
+    throw new RateLimitError("Sign-ups are paused for a moment. Try again later.");
+  }
+
   const token = randomToken();
   const now = new Date();
 
   if (existing) {
     await db
       .update(subscribers)
-      .set({ status: "pending", confirmToken: token, confirmSentAt: now })
+      .set({ status: "pending", confirmToken: token, confirmSentAt: now, statusReason: null })
       .where(eq(subscribers.id, existing.id));
   } else {
     const inserted = await db

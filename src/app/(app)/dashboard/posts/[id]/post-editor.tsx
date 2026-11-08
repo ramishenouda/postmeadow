@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RichEditor } from "@/components/editor/rich-editor";
+import { Monitor, Smartphone } from "lucide-react";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { deletePost, savePost, sendPost, sendTest, type PostInput } from "../actions";
@@ -55,6 +57,7 @@ export function PostEditor({
   const [save, setSave] = useState<SaveState>({ status: "saved" });
   const [notice, setNotice] = useState<Notice>(null);
   const [tab, setTab] = useState<"write" | "preview">("write");
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [busy, startTransition] = useTransition();
 
   // Bumped on every edit; a save only marks "saved" if nothing changed meanwhile.
@@ -119,6 +122,7 @@ export function PostEditor({
   // Live preview: the real email HTML, rendered on the server.
   const [previewHtml, setPreviewHtml] = useState<string>("");
   useEffect(() => {
+    if (tab !== "preview") return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -137,7 +141,7 @@ export function PostEditor({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [post.id, title, subtitle, slug, content]);
+  }, [tab, post.id, title, subtitle, slug, content]);
 
   const run = (
     action: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>,
@@ -197,48 +201,78 @@ export function PostEditor({
         </p>
       ) : null}
 
-      {/* Small screens: switch between writing and preview */}
-      <div className="bg-muted flex gap-1 rounded-lg p-1 text-sm lg:hidden" role="tablist">
-        {(["write", "preview"] as const).map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "flex-1 rounded-md px-3 py-1.5 capitalize",
-              tab === t ? "bg-background font-medium shadow-sm" : "text-muted-foreground",
-            )}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="bg-muted flex gap-1 rounded-lg p-1 text-sm" role="tablist">
+          {(
+            [
+              ["write", "Write"],
+              ["preview", "Email preview"],
+            ] as const
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "rounded-md px-3 py-1.5",
+                tab === t ? "bg-background font-medium shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === "preview" ? (
+          <div className="flex items-center gap-1" role="group" aria-label="Preview width">
+            {(
+              [
+                ["desktop", Monitor, "Desktop"],
+                ["mobile", Smartphone, "Mobile"],
+              ] as const
+            ).map(([d, Icon, label]) => (
+              <button
+                key={d}
+                onClick={() => setDevice(d)}
+                aria-pressed={device === d}
+                title={label}
+                className={cn(
+                  "text-muted-foreground hover:bg-muted inline-flex size-8 items-center justify-center rounded-md",
+                  device === d && "bg-muted text-foreground",
+                )}
+              >
+                <Icon className="size-4" aria-hidden />
+                <span className="sr-only">{label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className={cn("space-y-4", tab !== "write" && "hidden lg:block")}>
-          <input
-            value={title}
-            onChange={(e) => onTitle(e.target.value)}
-            placeholder="Title"
-            aria-label="Title"
-            maxLength={200}
-            className="placeholder:text-muted-foreground/60 w-full bg-transparent text-3xl font-semibold tracking-tight outline-none"
-          />
-          <input
-            value={subtitle}
-            onChange={(e) => edit(setSubtitle)(e.target.value)}
-            placeholder="Subtitle (optional, also used as the inbox preview)"
-            aria-label="Subtitle"
-            maxLength={300}
-            className="text-muted-foreground placeholder:text-muted-foreground/60 w-full bg-transparent text-lg outline-none"
-          />
-          <div className="space-y-1">
-            <Label htmlFor="slug" className="text-muted-foreground text-xs">
+      <div className={cn("mx-auto max-w-3xl space-y-4", tab !== "write" && "hidden")}>
+        <input
+          value={title}
+          onChange={(e) => onTitle(e.target.value)}
+          placeholder="Title"
+          aria-label="Title"
+          maxLength={200}
+          className="placeholder:text-muted-foreground/50 w-full bg-transparent text-4xl font-semibold tracking-tight outline-none"
+        />
+        <input
+          value={subtitle}
+          onChange={(e) => edit(setSubtitle)(e.target.value)}
+          placeholder="Add a subtitle (optional, also shown as the inbox preview)"
+          aria-label="Subtitle"
+          maxLength={300}
+          className="text-muted-foreground placeholder:text-muted-foreground/50 w-full bg-transparent text-xl outline-none"
+        />
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="slug" className="text-muted-foreground shrink-0 text-xs">
               Web address
             </Label>
-            <div className="focus-within:ring-ring/50 flex items-center rounded-lg border focus-within:ring-3">
-              <span className="text-muted-foreground truncate pl-2.5 text-xs select-none">
+            <div className="focus-within:ring-ring/50 flex min-w-0 flex-1 items-center rounded-md border focus-within:ring-3">
+              <span className="text-muted-foreground truncate pl-2 text-xs select-none">
                 {urlPrefix}
               </span>
               <Input
@@ -249,41 +283,35 @@ export function PostEditor({
                   edit(setSlug)(e.target.value.toLowerCase());
                 }}
                 maxLength={40}
-                className="h-8 min-w-24 border-0 pl-0.5 text-xs focus-visible:ring-0"
+                className="h-7 min-w-24 border-0 pl-0.5 text-xs focus-visible:ring-0"
                 aria-invalid={Boolean(fieldError("slug"))}
               />
             </div>
-            {fieldError("slug") ? (
-              <p className="text-destructive text-xs">{fieldError("slug")}</p>
-            ) : null}
           </div>
-          <textarea
-            value={content}
-            onChange={(e) => edit(setContent)(e.target.value)}
-            placeholder={
-              "Write in Markdown…\n\n## A heading\n\nSome **bold** text, a [link](https://example.com), and a list:\n\n- one\n- two"
-            }
-            aria-label="Content (Markdown)"
-            className="bg-background focus-visible:ring-ring/50 min-h-[60vh] w-full resize-y rounded-lg border p-4 font-mono text-sm leading-6 outline-none focus-visible:ring-3"
-          />
-          <p className="text-muted-foreground text-xs">
-            Markdown: **bold**, _italic_, [links](https://…), ![images](https://…), lists, &gt;
-            quotes, `code`, tables. Raw HTML is ignored.
-          </p>
+          {fieldError("slug") ? (
+            <p className="text-destructive text-xs">{fieldError("slug")}</p>
+          ) : null}
         </div>
+        <RichEditor initialMarkdown={post.content} onChange={edit(setContent)} />
+      </div>
 
-        <div className={cn("space-y-2", tab !== "preview" && "hidden lg:block")}>
-          <p className="text-muted-foreground text-xs">
-            Email preview. A test goes to {ownerEmail}.
+      {tab === "preview" ? (
+        <div className="space-y-2">
+          <p className="text-muted-foreground text-center text-xs">
+            Exactly what subscribers receive. Send a test to see it in your own inbox ({ownerEmail}
+            ).
           </p>
           <iframe
             title="Email preview"
             srcDoc={previewHtml}
             sandbox=""
-            className="h-[75vh] w-full rounded-lg border bg-white lg:sticky lg:top-4"
+            className={cn(
+              "mx-auto block h-[75vh] rounded-lg border bg-white shadow-sm transition-[width]",
+              device === "mobile" ? "w-[390px] max-w-full" : "w-full max-w-3xl",
+            )}
           />
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

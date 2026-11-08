@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { Markdown } from "@/components/markdown";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -58,16 +58,21 @@ async function PostLoader({ params }: Pick<Props, "params">) {
 
   const stats = await deliveryStats(post.id);
   const failures =
-    stats.failed > 0
+    stats.failed + stats.bounced + stats.complained > 0
       ? await db
-          .select({ email: subscribers.email, error: deliveries.error })
+          .select({ email: subscribers.email, status: deliveries.status, error: deliveries.error })
           .from(deliveries)
           .innerJoin(subscribers, eq(deliveries.subscriberId, subscribers.id))
-          .where(and(eq(deliveries.postId, post.id), eq(deliveries.status, "failed")))
+          .where(
+            and(
+              eq(deliveries.postId, post.id),
+              inArray(deliveries.status, ["failed", "bounced", "complained"]),
+            ),
+          )
           .orderBy(desc(deliveries.updatedAt))
           .limit(20)
       : [];
-  const done = stats.sent + stats.failed;
+  const done = stats.sent + stats.failed + stats.bounced + stats.complained;
   const percent = stats.total ? Math.round((done / stats.total) * 100) : 100;
 
   return (
@@ -117,6 +122,8 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         <Stat label="Delivered to provider" value={stats.sent} />
         <Stat label="Failed or skipped" value={stats.failed} />
         <Stat label="Still in queue" value={stats.queued + stats.sending} />
+        {stats.bounced ? <Stat label="Bounced" value={stats.bounced} /> : null}
+        {stats.complained ? <Stat label="Marked as spam" value={stats.complained} /> : null}
       </div>
 
       {post.status === "sending" ? (
@@ -128,11 +135,13 @@ async function PostLoader({ params }: Pick<Props, "params">) {
 
       {failures.length ? (
         <section className="space-y-2">
-          <h2 className="font-medium">Recent failures</h2>
+          <h2 className="font-medium">Problems</h2>
           <ul className="divide-y rounded-xl border text-sm">
             {failures.map((f, i) => (
-              <li key={i} className="flex flex-wrap justify-between gap-2 px-4 py-2">
-                <span className="font-medium">{f.email}</span>
+              <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                <span className="flex items-center gap-2 font-medium">
+                  {f.email} <StatusBadge status={f.status} />
+                </span>
                 <span className="text-muted-foreground">{f.error}</span>
               </li>
             ))}

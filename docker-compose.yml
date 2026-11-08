@@ -25,5 +25,14 @@ services:
       - "127.0.0.1:1025:1025" # SMTP
       - "127.0.0.1:8025:8025" # Web UI
 
+  # Separate inbox for the automated tests (they clear it), so your dev inbox is left alone.
+  # Started only with `--profile test` (npm run test:e2e does this).
+  mailpit-test:
+    image: axllent/mailpit:latest
+    profiles: ["test"]
+    ports:
+      - "127.0.0.1:1026:1025"
+      - "127.0.0.1:8026:8025"
+
 volumes:
   pgdata:

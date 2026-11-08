@@ -5,8 +5,9 @@ See [PLAN.md](PLAN.md) for the roadmap.
 
 ## What it does
 
-- **Writers** sign in with an emailed link, create a publication, write posts in Markdown
-  with a live preview of the real email, send themselves a test, then send to everyone.
+- **Writers** sign in with an emailed link, create a publication, write posts in a rich-text
+  editor (toolbar, keyboard shortcuts, links, images, tables) with a live preview of the real
+  email, send themselves a test, then send to everyone.
 - **Readers** subscribe on the publication's page (`/{slug}`), confirm by email (double
   opt-in), read the archive on the web, and unsubscribe in one click.
 - **Subscribers** can be searched, filtered, added by hand, imported from CSV and exported.
@@ -44,6 +45,8 @@ link in the message that arrives in Mailpit. New accounts go to onboarding to cr
 | `npm run lint`        | ESLint                                          |
 | `npm run typecheck`   | Generate route types, then TypeScript           |
 | `npm run format`      | Prettier                                        |
+| `npm test`            | Unit tests (Markdown round trip, editor)        |
+| `npm run test:e2e`    | End-to-end tests on an isolated stack           |
 | `npm run db:up`       | Start Postgres + Mailpit and wait until healthy |
 | `npm run db:down`     | Stop the containers (data is kept in a volume)  |
 | `npm run db:generate` | Create a migration from `src/db/schema.ts`      |
@@ -62,24 +65,67 @@ src/
     api/auth/             Better Auth endpoints
     api/subscriptions/    Double opt-in confirmation link
     api/unsubscribe/      RFC 8058 one-click unsubscribe (List-Unsubscribe-Post)
+    api/webhooks/resend/  Signed Resend webhooks (bounces, complaints)
     api/posts/[id]/preview  Live email preview for the editor
   db/schema.ts            Drizzle schema (source of truth for migrations)
   db/auth-schema.ts       Tables Better Auth needs (user, session, account, verification)
+  components/editor/      Rich-text editor (Tiptap): toolbar, link popover, image dialog
   emails/                 React Email templates (newsletter, confirmation, sign-in)
   lib/markdown/           Markdown → syntax tree → components (shared by email and web)
   lib/email/renderers/    Pluggable email builders, keyed by posts.content_format
   lib/email/send.ts       Transport: SMTP (Mailpit) or Resend, single + batch
   lib/sending.ts          Queue, batch, resume; claims rows with FOR UPDATE SKIP LOCKED
   lib/subscribers.ts      Subscribe / confirm / unsubscribe logic
+  lib/rate-limit.ts       Postgres-backed fixed-window rate limiter
+  lib/webhooks/resend.ts  Bounce / complaint / suppression handling
   lib/public-data.ts      Cached reads for public pages ("use cache" + cache tags)
   lib/dal.ts              Data Access Layer: session + ownership checks
   proxy.ts                Optimistic redirect for signed-out visitors
   env.ts                  Validated environment variables
 drizzle/              Generated SQL migrations
+tests/unit/           Unit tests (node:test)
+tests/e2e/            End-to-end tests (node:test) + helpers
+scripts/e2e.ts        Starts the isolated test stack and runs tests/e2e
 ```
 
 Pages that read the session do so inside a `<Suspense>` boundary, which Cache Components
 requires. Every server action re-checks the session through `src/lib/dal.ts`.
+
+## The editor
+
+Posts are written in a WYSIWYG editor built on [Tiptap](https://tiptap.dev) but **stored as
+Markdown**, so the email renderer, the web archive and older posts don't depend on the editor.
+Only formatting that survives that round trip is enabled (`src/components/editor/extensions.ts`).
+Underline, for example, has no Markdown syntax and is left out. `npm test` checks that
+Markdown written by the editor renders the same way in emails.
+
+Shortcuts: `Ctrl/⌘+B` bold, `Ctrl/⌘+I` italic, `Ctrl/⌘+K` link, `Ctrl/⌘+E` inline code,
+`Ctrl/⌘+Z` undo. Typing `## `, `- `, `1. `, `> ` or ` ``` ` at the start of a line formats it.
+
+## Abuse protection
+
+The public subscribe form is limited to **10 attempts per IP per 10 minutes**, and each
+publication sends at most **300 confirmation emails per hour**
+(`CONFIRMATIONS_PER_PUBLICATION_PER_HOUR`). The second limit still holds if someone rotates or
+forges IP addresses. There's also a hidden honeypot field, and an address gets at most one
+confirmation email every 10 minutes. Counters live in Postgres (`rate_limits`), so they're shared
+across app instances. Sign-in links are rate-limited by Better Auth.
+
+## Tests
+
+```bash
+npm test            # unit: Markdown round trip + the real editor running headless
+npm run test:e2e    # end-to-end: the whole product over HTTP
+```
+
+`test:e2e` never touches your dev data. It creates a separate `newsletter_test` database, starts a
+separate Mailpit (`docker compose --profile test`, ports 1026/8026), builds the app and runs it
+on port 3100. The tests drive it like a browser: real sign-in emails, server actions, webhooks
+signed like Resend's. Use `-- --skip-build` to reuse the last build, or pass a file to run just
+that one: `npm run test:e2e -- --skip-build tests/e2e/webhooks.test.ts`.
+
+CI (`.github/workflows/ci.yml`) runs formatting, lint, typecheck, unit and end-to-end tests on
+every push and pull request.
 
 ## Going to production
 
@@ -92,5 +138,10 @@ requires. Every server action re-checks the session through `src/lib/dal.ts`.
 4. **Long sends:** sending runs in `after()` once the send request has been answered. On
    serverless hosts with short time limits, a large send can stop part-way. Use "Resume
    sending" on the post page, or move `processDeliveries` into a job queue.
-5. **Bounces:** subscribers aren't marked `bounced` automatically yet. Add Resend's bounce and
-   complaint webhook before the list gets large.
+5. **Bounces and complaints:** in Resend → Webhooks, add `{APP_URL}/api/webhooks/resend` with
+   the `email.bounced`, `email.complained`, `email.suppressed` and `email.failed` events, and put
+   its signing secret in `RESEND_WEBHOOK_SECRET`. Hard bounces and suppressions mark the
+   subscriber `bounced`; spam complaints unsubscribe them. Both are skipped by future sends.
+6. **Client IP:** set `CLIENT_IP_HEADER` to the header your host sets (Vercel: `x-real-ip`,
+   Fly.io: `fly-client-ip`, Cloudflare: `cf-connecting-ip`), so the subscribe rate limit can't be
+   dodged with a forged `X-Forwarded-For`.

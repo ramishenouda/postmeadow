@@ -1,9 +1,15 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { db } from "@/db";
 import { publications } from "@/db/schema";
+import { clientIp } from "@/lib/client-ip";
+import { hit, RateLimitError } from "@/lib/rate-limit";
 import { emailSchema, requestSubscription } from "@/lib/subscribers";
+
+/** Per visitor: generous for a shared office/home IP, useless for a bot. */
+const PER_IP = { limit: 10, windowSeconds: 10 * 60 };
 
 export type SubscribeState =
   | { status: "idle" }
@@ -21,6 +27,15 @@ export async function subscribe(
   }
 
   const rawEmail = String(formData.get("email") ?? "");
+
+  if (!(await hit(`subscribe:ip:${clientIp(await headers())}`, PER_IP))) {
+    return {
+      status: "error",
+      message: "Too many attempts. Try again in a few minutes.",
+      email: rawEmail,
+    };
+  }
+
   const parsed = emailSchema.safeParse(rawEmail);
   if (!parsed.success) {
     return { status: "error", message: "Enter a valid email address.", email: rawEmail };
@@ -36,6 +51,9 @@ export async function subscribe(
   try {
     await requestSubscription(publication, parsed.data);
   } catch (error) {
+    if (error instanceof RateLimitError) {
+      return { status: "error", message: error.message, email: rawEmail };
+    }
     console.error("subscribe failed", error);
     return {
       status: "error",

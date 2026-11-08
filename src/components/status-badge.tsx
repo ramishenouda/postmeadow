@@ -10,9 +10,10 @@ const styles: Record<string, string> = {
   unsubscribed: "bg-stone-100 text-stone-600 ring-stone-500/20",
   bounced: "bg-red-50 text-red-700 ring-red-600/20",
   failed: "bg-red-50 text-red-700 ring-red-600/20",
+  complained: "bg-red-50 text-red-700 ring-red-600/20",
 };
 
-const labels: Record<string, string> = { pending: "unconfirmed" };
+const labels: Record<string, string> = { pending: "unconfirmed", complained: "spam report" };
 
 export function StatusBadge({ status }: { status: string }) {
   return (
