@@ -1,6 +1,6 @@
 import "server-only";
 import { and, count, eq, inArray, lt, sql } from "drizzle-orm";
-import { revalidateTag } from "next/cache";
+import { revalidatePublicTag } from "@/lib/revalidate";
 import { db } from "@/db";
 import { deliveries, deliveryLinkClicks, posts, publications, subscribers } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
@@ -53,19 +53,20 @@ export async function sendTestEmail(post: Post, publication: Publication, to: st
 }
 
 /**
- * Locks the post (draft → sending) and queues one delivery per active subscriber.
- * Returns the number queued, or null if the post was not a draft any more.
+ * Locks the post (draft or scheduled → sending) and queues one delivery per active
+ * subscriber. Returns the number queued, or null if another request or the scheduler
+ * got there first. The status change is atomic, so a post is only ever queued once.
  */
 export async function queuePost(postId: string, publicationId: string): Promise<number | null> {
   return db.transaction(async (tx) => {
     const [locked] = await tx
       .update(posts)
-      .set({ status: "sending", publishedAt: new Date() })
+      .set({ status: "sending", publishedAt: new Date(), scheduledAt: null })
       .where(
         and(
           eq(posts.id, postId),
           eq(posts.publicationId, publicationId),
-          eq(posts.status, "draft"),
+          inArray(posts.status, ["draft", "scheduled"]),
         ),
       )
       .returning({ id: posts.id });
@@ -88,7 +89,20 @@ export async function queuePost(postId: string, publicationId: string): Promise<
  * at the same time (rows are claimed with SKIP LOCKED) and safe to call again
  * after a crash (stale claims are put back in the queue).
  */
-export async function processDeliveries(postId: string): Promise<void> {
+/** Sends running in this process, so the scheduler doesn't start a second one. */
+const running = new Map<string, Promise<void>>();
+
+export const isSendRunning = (postId: string) => running.has(postId);
+
+export function processDeliveries(postId: string): Promise<void> {
+  const existing = running.get(postId);
+  if (existing) return existing;
+  const run = processDeliveriesOnce(postId).finally(() => running.delete(postId));
+  running.set(postId, run);
+  return run;
+}
+
+async function processDeliveriesOnce(postId: string): Promise<void> {
   const [row] = await db
     .select({ post: posts, publication: publications })
     .from(posts)
@@ -204,8 +218,10 @@ export async function processDeliveries(postId: string): Promise<void> {
       .update(posts)
       .set({ status: "sent" })
       .where(and(eq(posts.id, postId), eq(posts.status, "sending")));
-    // The post now appears in the public archive.
-    revalidateTag(publicationTag(publication.slug), { expire: 0 });
+    // The post now appears in the public archive. (Works from requests and from the scheduler.)
+    await revalidatePublicTag(publicationTag(publication.slug)).catch((e) =>
+      console.error("archive refresh failed; it updates within minutes anyway", e),
+    );
   }
 }
 

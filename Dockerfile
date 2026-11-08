@@ -15,10 +15,13 @@ RUN npm ci
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# The public URL is baked into pages built ahead of time (canonical and social-preview
+# links on / and /pricing). Not a secret; the deploy workflow passes the real one.
+ARG APP_URL=https://postmeadow.com
 # Placeholders, only for this command, so environment validation passes while building.
 # Nothing secret is baked in; the real values come from the server's .env at runtime.
 RUN NEXT_OUTPUT=standalone \
-    APP_URL=http://build.invalid \
+    APP_URL=$APP_URL \
     DATABASE_URL=postgres://build:build@build.invalid:5432/build \
     BETTER_AUTH_SECRET=build-time-placeholder-never-used-at-runtime \
     EMAIL_FROM="Postmeadow <build@build.invalid>" \

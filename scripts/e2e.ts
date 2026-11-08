@@ -57,6 +57,8 @@ const serverEnv: NodeJS.ProcessEnv = {
   CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: CONFIRMATION_CAP,
   CLIENT_IP_HEADER: "", // tests send X-Forwarded-For to look like different visitors
   STORAGE_DIR,
+  SCHEDULER_INTERVAL_MS: "1000", // so scheduled-send tests don't wait 30s
+  PORT: String(PORT), // the server calls itself on this port (src/lib/revalidate.ts)
   // Billing against stripe-mock (docker compose profile "test"), never real Stripe.
   STRIPE_SECRET_KEY: "sk_test_123", // stripe-mock only accepts keys shaped like this
   STRIPE_WEBHOOK_SECRET,
@@ -114,6 +116,7 @@ async function main() {
       "STRIPE_SECRET_KEY",
       "STRIPE_WEBHOOK_SECRET",
       "STRIPE_API_BASE",
+      "SCHEDULER_INTERVAL_MS",
     ];
     const lines = keys.map((k) => `${k}=${serverEnv[k]}`);
     lines.push("BETTER_AUTH_SECRET=e2e-only-auth-secret-0123456789abcdef", "PORT=3100");

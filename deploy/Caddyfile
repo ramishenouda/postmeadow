@@ -8,7 +8,7 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
+		# Framing rules are set by the app (next.config.ts): only /embed/ may be framed.
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}

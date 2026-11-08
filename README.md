@@ -18,7 +18,14 @@ See [PLAN.md](PLAN.md) for the roadmap.
 - **Sending** happens in batches in the background, with per-recipient status. A send that
   was interrupted can be resumed without emailing anyone twice.
 - **Engagement:** open rate, click rate and top links per post; a welcome email when someone
-  confirms; an RSS feed and social preview images for every publication and post.
+  confirms; an RSS feed and social preview images for every publication and post; a
+  subscriber growth chart on the dashboard.
+- **Scheduling and editing:** schedule posts for later (they stay editable until then), edit
+  the web version of a sent post, or take it off the web. A built-in scheduler sends due posts
+  and picks up sends interrupted by a restart, so nothing needs a manual "resume".
+- **Growth on other sites:** an embeddable signup form (iframe) and a plain HTML form that
+  posts to `/api/subscribe/{slug}`, both with the same protections as the main page.
+- **SEO:** `robots.txt`, a sitemap of publications and posts, and canonical URLs.
 - **Plans and billing:** Free, Pro and Business with storage add-ons, paid through Stripe
   (Checkout, customer portal, webhooks). A landing page at `/` and pricing at `/pricing`.
 

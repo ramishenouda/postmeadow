@@ -45,6 +45,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
+          build-args: |
+            APP_URL=${{ secrets.DEPLOY_SITE_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

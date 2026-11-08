@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   title: { absolute: `${APP_NAME}: a calm home for your newsletter` },
   description:
     "Write in a friendly editor, grow your list with a beautiful public page, and send every issue straight to your readers' inboxes. Free to start.",
+  alternates: { canonical: "/" },
 };
 
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [

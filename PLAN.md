@@ -80,7 +80,11 @@ pipeline only ever sees the finished HTML and text.
 - [ ] **Going live**: follow `deploy/README.md` on the server; Resend and Stripe in
       live mode; off-server backup copies; error monitoring.
 - [ ] **Before launch**: Free-plan sending limits (email cost scales with subscribers).
-- [ ] **Later**: a job runner for scheduled sends and very large lists.
+- [x] **What every competitor has**: scheduled sends (with an in-process scheduler
+      that also resumes interrupted sends), embeddable signup forms, SEO basics
+      (sitemap, robots, canonical), editing/unpublishing sent posts, growth chart.
+- [ ] **Next competitive features**: custom domains per publication, importing posts
+      from Substack/beehiiv/Ghost, tags and segments, paid newsletters (Stripe Connect).
 
 ## After the MVP
 

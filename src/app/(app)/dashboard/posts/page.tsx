@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { db } from "@/db";
 import { deliveries, posts } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { createPost } from "./actions";
 
 export const metadata: Metadata = { title: "Posts" };
@@ -40,12 +40,20 @@ async function PostList() {
       status: posts.status,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
+      scheduledAt: posts.scheduledAt,
+      webHidden: posts.webHidden,
       sent: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = posts.id and d.status = 'sent')`,
       opened: sql<number>`(select count(d.opened_at)::int from ${deliveries} d where d.post_id = posts.id)`,
     })
     .from(posts)
     .where(eq(posts.publicationId, publication.id))
-    .orderBy(sql`${posts.status} = 'draft' desc`, desc(posts.publishedAt), desc(posts.updatedAt));
+    // Drafts, then scheduled (soonest first), then sent (newest first).
+    .orderBy(
+      sql`case ${posts.status} when 'draft' then 0 when 'scheduled' then 1 else 2 end`,
+      sql`${posts.scheduledAt} asc nulls last`,
+      desc(posts.publishedAt),
+      desc(posts.updatedAt),
+    );
 
   if (rows.length === 0) {
     return (
@@ -71,13 +79,18 @@ async function PostList() {
               <p className="text-muted-foreground text-xs">
                 {post.status === "draft"
                   ? `Edited ${formatDate(post.updatedAt)}`
-                  : `Sent ${formatDate(post.publishedAt)} · ${post.sent.toLocaleString("en")} delivered` +
-                    (post.sent && post.opened
-                      ? ` · ${Math.round((post.opened / post.sent) * 100)}% opened`
-                      : "")}
+                  : post.status === "scheduled"
+                    ? `Scheduled for ${formatDateTime(post.scheduledAt)}`
+                    : `Sent ${formatDate(post.publishedAt)} · ${post.sent.toLocaleString("en")} delivered` +
+                      (post.sent && post.opened
+                        ? ` · ${Math.round((post.opened / post.sent) * 100)}% opened`
+                        : "")}
               </p>
             </div>
-            <StatusBadge status={post.status} />
+            <span className="flex shrink-0 gap-1.5">
+              {post.webHidden ? <StatusBadge status="hidden" /> : null}
+              <StatusBadge status={post.status} />
+            </span>
           </Link>
         </li>
       ))}

@@ -12,6 +12,23 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "3mb",
     },
   },
+  // Framing: nothing may be embedded in other sites, except the signup form at /embed/…
+  // (writers put it on their own websites in an <iframe>).
+  async headers() {
+    return [
+      {
+        source: "/embed/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
+      {
+        source: "/((?!embed/).*)",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

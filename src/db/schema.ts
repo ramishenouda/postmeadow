@@ -85,7 +85,12 @@ export const subscribers = pgTable(
 
 // ─── Posts ───────────────────────────────────────────────────────────────────
 
-export const postStatus = pgEnum("post_status", ["draft", "sending", "sent"]);
+export const postStatus = pgEnum("post_status", [
+  "draft",
+  "scheduled", // waits for scheduledAt; the scheduler (src/lib/scheduler.ts) sends it
+  "sending",
+  "sent",
+]);
 
 export const posts = pgTable(
   "posts",
@@ -104,9 +109,15 @@ export const posts = pgTable(
     content: text("content").notNull().default(""),
     status: postStatus("status").notNull().default("draft"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    // A sent post the writer took off the web (archive, feed, sitemap). Emails stay sent.
+    webHidden: boolean("web_hidden").notNull().default(false),
     ...timestamps,
   },
-  (t) => [uniqueIndex("posts_publication_slug_idx").on(t.publicationId, t.slug)],
+  (t) => [
+    uniqueIndex("posts_publication_slug_idx").on(t.publicationId, t.slug),
+    index("posts_scheduled_idx").on(t.status, t.scheduledAt),
+  ],
 );
 
 // ─── Deliveries (one row per post × subscriber) ──────────────────────────────

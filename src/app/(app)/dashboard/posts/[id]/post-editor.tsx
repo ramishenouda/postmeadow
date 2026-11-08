@@ -18,9 +18,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichEditor } from "@/components/editor/rich-editor";
 import { Monitor, Smartphone } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
-import { deletePost, savePost, sendPost, sendTest, type PostInput } from "../actions";
+import {
+  deletePost,
+  savePost,
+  schedulePost,
+  sendPost,
+  sendTest,
+  unschedulePost,
+  type PostInput,
+} from "../actions";
 
 type Draft = { id: string; title: string; subtitle: string; slug: string; content: string };
 
@@ -40,12 +57,19 @@ export function PostEditor({
   urlPrefix,
   activeSubscribers,
   ownerEmail,
+  mode = "draft",
+  scheduledAt = null,
 }: {
   post: Draft;
   urlPrefix: string;
   activeSubscribers: number;
   ownerEmail: string;
+  /** "sent": editing the web version of a post that already went out. */
+  mode?: "draft" | "sent";
+  /** ISO time, when the post is scheduled. */
+  scheduledAt?: string | null;
 }) {
+  const sentMode = mode === "sent";
   const [title, setTitle] = useState(post.title);
   const [subtitle, setSubtitle] = useState(post.subtitle);
   const [slug, setSlug] = useState(post.slug);
@@ -75,7 +99,7 @@ export function PostEditor({
 
   const onTitle = (value: string) => {
     edit(setTitle)(value);
-    if (slugFollowsTitle) setSlug(slugify(value) || post.slug);
+    if (slugFollowsTitle && !sentMode) setSlug(slugify(value) || post.slug);
   };
 
   const flush = useCallback(async (): Promise<boolean> => {
@@ -168,24 +192,52 @@ export function PostEditor({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-sm">
-          <Link href="/dashboard/posts" className="text-muted-foreground hover:underline">
-            ← Posts
+          <Link
+            href={sentMode ? `/dashboard/posts/${post.id}` : "/dashboard/posts"}
+            className="text-muted-foreground hover:underline"
+          >
+            {sentMode ? "← Back to stats" : "← Posts"}
           </Link>
           <SaveIndicator state={save} />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DeleteButton postId={post.id} disabled={busy} />
-          <Button variant="outline" disabled={busy} onClick={() => run(() => sendTest(post.id))}>
-            Send test
-          </Button>
-          <SendButton
-            title={title}
-            activeSubscribers={activeSubscribers}
-            disabled={busy}
-            onConfirm={() => run(() => sendPost(post.id))}
-          />
-        </div>
+        {sentMode ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <DeleteButton postId={post.id} disabled={busy} />
+            <Button variant="outline" disabled={busy} onClick={() => run(() => sendTest(post.id))}>
+              Send test
+            </Button>
+            <SendDialog
+              title={title}
+              activeSubscribers={activeSubscribers}
+              scheduledAt={scheduledAt}
+              disabled={busy}
+              onSendNow={() => run(() => sendPost(post.id))}
+              onSchedule={(at) => run(() => schedulePost(post.id, at))}
+            />
+          </div>
+        )}
       </div>
+
+      {sentMode ? (
+        <p className="bg-muted/40 rounded-lg border px-3 py-2 text-sm">
+          You&apos;re editing the <strong>web version</strong>. Emails that already went out
+          don&apos;t change. Changes appear on your page as soon as they&apos;re saved.
+        </p>
+      ) : scheduledAt ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-600/20 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <span>
+            Scheduled for <LocalTime iso={scheduledAt} />. You can keep editing until then.
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => run(() => unschedulePost(post.id))}
+          >
+            Unschedule
+          </Button>
+        </div>
+      ) : null}
 
       {notice ? (
         <p
@@ -282,6 +334,9 @@ export function PostEditor({
                   setSlugFollowsTitle(false);
                   edit(setSlug)(e.target.value.toLowerCase());
                 }}
+                // Sent emails link to this address, so it can't change after sending.
+                readOnly={sentMode}
+                title={sentMode ? "The address can't change after sending" : undefined}
                 maxLength={40}
                 className="h-7 min-w-24 border-0 pl-0.5 text-xs focus-visible:ring-0"
                 aria-invalid={Boolean(fieldError("slug"))}
@@ -340,37 +395,117 @@ function SaveIndicator({ state }: { state: SaveState }) {
   );
 }
 
-function SendButton({
+/** A time in the viewer's own time zone. The server renders UTC; the browser corrects it. */
+function LocalTime({ iso }: { iso: string }) {
+  return (
+    <time dateTime={iso} suppressHydrationWarning className="font-medium">
+      {new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+    </time>
+  );
+}
+
+/** "YYYY-MM-DDTHH:mm" in local time, for <input type="datetime-local">. */
+function toLocalInput(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function defaultScheduleTime(scheduledAt: string | null): string {
+  if (scheduledAt) return toLocalInput(new Date(scheduledAt));
+  const tomorrowNine = new Date();
+  tomorrowNine.setDate(tomorrowNine.getDate() + 1);
+  tomorrowNine.setHours(9, 0, 0, 0);
+  return toLocalInput(tomorrowNine);
+}
+
+function SendDialog({
   title,
   activeSubscribers,
+  scheduledAt,
   disabled,
-  onConfirm,
+  onSendNow,
+  onSchedule,
 }: {
   title: string;
   activeSubscribers: number;
+  scheduledAt: string | null;
   disabled: boolean;
-  onConfirm: () => void;
+  onSendNow: () => void;
+  onSchedule: (isoTime: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [when, setWhen] = useState<"now" | "later">(scheduledAt ? "later" : "now");
+  const [at, setAt] = useState(() => defaultScheduleTime(scheduledAt));
   const people = `${activeSubscribers.toLocaleString("en")} ${activeSubscribers === 1 ? "subscriber" : "subscribers"}`;
+
   return (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button disabled={disabled}>Send…</Button>} />
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Send “{title || "Untitled"}”?</AlertDialogTitle>
-          <AlertDialogDescription>
-            It goes to {people} and is published in your web archive. You can&apos;t edit or undo it
-            after sending.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} disabled={activeSubscribers === 0}>
-            Send to {people}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<Button disabled={disabled}>{scheduledAt ? "Reschedule…" : "Send…"}</Button>}
+      />
+      <DialogContent>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setOpen(false);
+            // The input is local time; the browser converts it to an exact moment.
+            if (when === "later") onSchedule(new Date(at).toISOString());
+            else onSendNow();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Send “{title || "Untitled"}”</DialogTitle>
+            <DialogDescription>
+              It goes to your subscribers and is published in your web archive. Emails can&apos;t be
+              changed after they&apos;re sent.
+            </DialogDescription>
+          </DialogHeader>
+          <fieldset className="space-y-2">
+            <legend className="sr-only">When</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="when"
+                checked={when === "now"}
+                onChange={() => setWhen("now")}
+              />
+              Send now to {people}
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="when"
+                checked={when === "later"}
+                onChange={() => setWhen("later")}
+              />
+              Schedule for later
+            </label>
+            {when === "later" ? (
+              <div className="space-y-1 pl-6">
+                <Input
+                  type="datetime-local"
+                  value={at}
+                  onChange={(e) => setAt(e.target.value)}
+                  required
+                  className="w-auto"
+                  aria-label="Send at"
+                />
+                <p className="text-muted-foreground text-xs">
+                  Your time zone ({Intl.DateTimeFormat().resolvedOptions().timeZone}). It goes to
+                  everyone subscribed at that moment.
+                </p>
+              </div>
+            ) : null}
+          </fieldset>
+          <DialogFooter>
+            <Button type="submit" disabled={when === "now" && activeSubscribers === 0}>
+              {when === "now" ? `Send to ${people}` : "Schedule"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

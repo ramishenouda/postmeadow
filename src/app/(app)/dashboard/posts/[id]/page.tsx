@@ -16,6 +16,7 @@ import { deliveryStats, engagementStats } from "@/lib/sending";
 import { AutoRefresh } from "./auto-refresh";
 import { PostEditor } from "./post-editor";
 import { ResumeButton } from "./resume-button";
+import { WebVisibilityButton } from "./web-visibility-button";
 
 export const metadata: Metadata = { title: "Post" };
 
@@ -35,7 +36,7 @@ async function PostLoader({ params }: Pick<Props, "params">) {
   if (!owned) notFound();
   const { user, publication, post } = owned;
 
-  if (post.status === "draft") {
+  if (post.status === "draft" || post.status === "scheduled") {
     const [{ active }] = await db
       .select({ active: count() })
       .from(subscribers)
@@ -52,6 +53,7 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         urlPrefix={`${new URL(env.APP_URL).host}/${publication.slug}/p/`}
         activeSubscribers={active}
         ownerEmail={user.email}
+        scheduledAt={post.status === "scheduled" ? (post.scheduledAt?.toISOString() ?? null) : null}
       />
     );
   }
@@ -85,18 +87,31 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{post.title}</h1>
           <StatusBadge status={post.status} />
+          {post.webHidden ? <StatusBadge status="hidden" /> : null}
         </div>
         <p className="text-muted-foreground text-sm">
           {post.status === "sending" ? "Sending started" : "Sent"}{" "}
           {formatDateTime(post.publishedAt)}
+          {post.webHidden ? " · Removed from your web archive" : null}
         </p>
         {post.status === "sent" ? (
-          <Link
-            href={`/${publication.slug}/p/${post.slug}`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            View on the web
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {post.webHidden ? null : (
+              <Link
+                href={`/${publication.slug}/p/${post.slug}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                View on the web
+              </Link>
+            )}
+            <Link
+              href={`/dashboard/posts/${post.id}/edit`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Edit web version
+            </Link>
+            <WebVisibilityButton postId={post.id} hidden={post.webHidden} />
+          </div>
         ) : null}
       </div>
 

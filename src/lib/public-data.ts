@@ -12,6 +12,8 @@ import { publicationTag } from "@/lib/cache-tags";
  * The lifetime is deliberately short ("minutes"): tags make changes show up
  * immediately, and the short lifetime bounds how long a page can stay stale if
  * an invalidation is ever missed (seen once in testing, not reproducible).
+ *
+ * "On the web" means sent and not hidden by the writer (posts.webHidden).
  */
 
 export async function getPublicPublication(slug: string) {
@@ -47,7 +49,7 @@ export async function getPublishedPosts(slug: string) {
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
-    .where(and(eq(publications.slug, slug), eq(posts.status, "sent")))
+    .where(and(eq(publications.slug, slug), eq(posts.status, "sent"), eq(posts.webHidden, false)))
     .orderBy(desc(posts.publishedAt));
 }
 
@@ -66,7 +68,7 @@ export async function getFeedPosts(slug: string, limit = 20) {
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
-    .where(and(eq(publications.slug, slug), eq(posts.status, "sent")))
+    .where(and(eq(publications.slug, slug), eq(posts.status, "sent"), eq(posts.webHidden, false)))
     .orderBy(desc(posts.publishedAt))
     .limit(limit);
 }
@@ -86,7 +88,14 @@ export async function getPublishedPost(slug: string, postSlug: string) {
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
-    .where(and(eq(publications.slug, slug), eq(posts.slug, postSlug), eq(posts.status, "sent")))
+    .where(
+      and(
+        eq(publications.slug, slug),
+        eq(posts.slug, postSlug),
+        eq(posts.status, "sent"),
+        eq(posts.webHidden, false),
+      ),
+    )
     .limit(1);
   return post ?? null;
 }

@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Pricing",
   description:
     "Free forever with every feature. Pro and Business add storage for image-heavy newsletters.",
+  alternates: { canonical: "/pricing" },
 };
 
 export default function PricingPage() {

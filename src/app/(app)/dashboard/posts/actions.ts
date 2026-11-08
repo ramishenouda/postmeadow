@@ -1,12 +1,13 @@
 "use server";
 
-import { and, count, eq } from "drizzle-orm";
-import { refresh } from "next/cache";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { posts, subscribers } from "@/db/schema";
+import { publicationTag } from "@/lib/cache-tags";
 import { requirePublication } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { getOwnedPost } from "@/lib/posts";
@@ -52,7 +53,10 @@ export type SaveResult =
 export async function savePost(postId: string, input: PostInput): Promise<SaveResult> {
   const owned = await getOwnedPost(postId);
   if (!owned) return { ok: false, error: "Post not found." };
-  if (owned.post.status !== "draft") return { ok: false, error: "Sent posts can't be edited." };
+  const { post, publication } = owned;
+  if (post.status === "sending") {
+    return { ok: false, error: "This post is being sent; edit it once sending finishes." };
+  }
 
   const parsed = postInput.safeParse(input);
   if (!parsed.success) {
@@ -61,10 +65,24 @@ export async function savePost(postId: string, input: PostInput): Promise<SaveRe
   }
 
   try {
-    await db
-      .update(posts)
-      .set(parsed.data)
-      .where(and(eq(posts.id, postId), eq(posts.status, "draft")));
+    if (post.status === "sent") {
+      // Only the web version changes; emails already went out. The address stays
+      // the same so links in those emails keep working.
+      await db
+        .update(posts)
+        .set({
+          title: parsed.data.title,
+          subtitle: parsed.data.subtitle,
+          content: parsed.data.content,
+        })
+        .where(and(eq(posts.id, postId), eq(posts.status, "sent")));
+      updateTag(publicationTag(publication.slug));
+    } else {
+      await db
+        .update(posts)
+        .set(parsed.data)
+        .where(and(eq(posts.id, postId), inArray(posts.status, ["draft", "scheduled"])));
+    }
   } catch (error) {
     if (isUniqueViolation(error)) {
       return { ok: false, error: "Another post already uses this URL.", field: "slug" };
@@ -97,16 +115,79 @@ export async function sendTest(postId: string): Promise<ActionResult> {
   return { ok: true, message: `Test sent to ${owned.user.email}` };
 }
 
+function notReadyToSend(post: { title: string; content: string; slug: string }): string | null {
+  if (!post.title.trim()) return "Add a title before sending.";
+  if (!post.content.trim()) return "Write something before sending.";
+  if (post.slug.startsWith("untitled-")) return "Set the post URL before sending.";
+  return null;
+}
+
+const MIN_SCHEDULE_AHEAD_MS = 60 * 1000;
+const MAX_SCHEDULE_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Schedule (or reschedule) a post. The scheduler sends it at `at` to everyone who's
+ * subscribed by then, and publishes it on the web. Scheduled posts stay editable.
+ */
+export async function schedulePost(postId: string, at: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  const { post } = owned;
+  if (post.status !== "draft" && post.status !== "scheduled") {
+    return { ok: false, error: "This post has already been sent." };
+  }
+  const blocker = notReadyToSend(post);
+  if (blocker) return { ok: false, error: blocker.replace("sending", "scheduling") };
+
+  const when = new Date(at);
+  const ahead = when.getTime() - Date.now();
+  if (Number.isNaN(ahead)) return { ok: false, error: "Pick a date and time." };
+  if (ahead < MIN_SCHEDULE_AHEAD_MS) return { ok: false, error: "Pick a time in the future." };
+  if (ahead > MAX_SCHEDULE_AHEAD_MS) return { ok: false, error: "Schedule at most a year ahead." };
+
+  await db
+    .update(posts)
+    .set({ status: "scheduled", scheduledAt: when })
+    .where(and(eq(posts.id, postId), inArray(posts.status, ["draft", "scheduled"])));
+  refresh();
+  return { ok: true, message: "Scheduled." };
+}
+
+export async function unschedulePost(postId: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned || owned.post.status !== "scheduled") {
+    return { ok: false, error: "This post isn't scheduled." };
+  }
+  await db
+    .update(posts)
+    .set({ status: "draft", scheduledAt: null })
+    .where(and(eq(posts.id, postId), eq(posts.status, "scheduled")));
+  refresh();
+  return { ok: true, message: "Back to draft." };
+}
+
+/** Take a sent post off the web (archive, post page, feed, sitemap), or put it back. */
+export async function setWebHidden(postId: string, hidden: boolean): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned || owned.post.status !== "sent") return { ok: false, error: "Post not found." };
+  await db
+    .update(posts)
+    .set({ webHidden: hidden })
+    .where(and(eq(posts.id, postId), eq(posts.status, "sent")));
+  updateTag(publicationTag(owned.publication.slug));
+  refresh();
+  return { ok: true, message: hidden ? "Removed from the web." : "Published on the web again." };
+}
+
 export async function sendPost(postId: string): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
   if (!owned) return { ok: false, error: "Post not found." };
   const { post, publication } = owned;
-  if (post.status !== "draft") return { ok: false, error: "This post has already been sent." };
-  if (!post.title.trim()) return { ok: false, error: "Add a title before sending." };
-  if (!post.content.trim()) return { ok: false, error: "Write something before sending." };
-  if (post.slug.startsWith("untitled-")) {
-    return { ok: false, error: "Set the post URL before sending." };
+  if (post.status !== "draft" && post.status !== "scheduled") {
+    return { ok: false, error: "This post has already been sent." };
   }
+  const blocker = notReadyToSend(post);
+  if (blocker) return { ok: false, error: blocker };
 
   const [{ active }] = await db
     .select({ active: count() })

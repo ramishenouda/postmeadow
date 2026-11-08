@@ -7,13 +7,19 @@ const styles: Record<string, string> = {
   sending: "bg-sky-50 text-sky-700 ring-sky-600/20",
   queued: "bg-sky-50 text-sky-700 ring-sky-600/20",
   draft: "bg-stone-100 text-stone-700 ring-stone-500/20",
+  scheduled: "bg-violet-50 text-violet-700 ring-violet-600/20",
+  hidden: "bg-stone-100 text-stone-600 ring-stone-500/20",
   unsubscribed: "bg-stone-100 text-stone-600 ring-stone-500/20",
   bounced: "bg-red-50 text-red-700 ring-red-600/20",
   failed: "bg-red-50 text-red-700 ring-red-600/20",
   complained: "bg-red-50 text-red-700 ring-red-600/20",
 };
 
-const labels: Record<string, string> = { pending: "unconfirmed", complained: "spam report" };
+const labels: Record<string, string> = {
+  pending: "unconfirmed",
+  complained: "spam report",
+  hidden: "off the web",
+};
 
 export function StatusBadge({ status }: { status: string }) {
   return (

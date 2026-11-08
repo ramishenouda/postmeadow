@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { listImages, storageUsage } from "@/lib/images/service";
+import { EmbedSnippets } from "./embed-snippets";
 import { SettingsForm } from "./settings-form";
 import { StorageSection } from "./storage-section";
 
@@ -23,8 +24,16 @@ export default function SettingsPage() {
       <Suspense fallback={<div className="bg-muted h-48 animate-pulse rounded-xl" />}>
         <Storage />
       </Suspense>
+      <Suspense fallback={<div className="bg-muted h-48 animate-pulse rounded-xl" />}>
+        <Embed />
+      </Suspense>
     </div>
   );
+}
+
+async function Embed() {
+  const { publication } = await requirePublication();
+  return <EmbedSnippets origin={new URL(env.APP_URL).origin} slug={publication.slug} />;
 }
 
 async function Settings() {

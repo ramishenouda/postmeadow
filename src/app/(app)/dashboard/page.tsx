@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { StatusBadge } from "@/components/status-badge";
+import { SubscriberChart } from "@/components/subscriber-chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
@@ -10,6 +11,7 @@ import { deliveries, posts, subscribers } from "@/db/schema";
 import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { formatDate } from "@/lib/format";
+import { subscriberGrowth } from "@/lib/growth";
 import { cn } from "@/lib/utils";
 import { createPost } from "./posts/actions";
 
@@ -32,7 +34,7 @@ async function Dashboard() {
       .from(subscribers)
       .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.status, status)));
 
-  const [[active], [pending], [sentPosts], recent] = await Promise.all([
+  const [[active], [pending], [sentPosts], recent, growth] = await Promise.all([
     countSubscribers("active"),
     countSubscribers("pending"),
     db
@@ -52,7 +54,10 @@ async function Dashboard() {
       .where(eq(posts.publicationId, publication.id))
       .orderBy(desc(posts.updatedAt))
       .limit(5),
+    subscriberGrowth(publication.id, 30),
   ]);
+  const gained = growth.reduce((n, d) => n + d.gained, 0);
+  const lost = growth.reduce((n, d) => n + d.lost, 0);
 
   const publicUrl = new URL(`/${publication.slug}`, env.APP_URL);
   const steps = [
@@ -112,6 +117,20 @@ async function Dashboard() {
         />
         <Stat label="Posts sent" value={sentPosts.n} href="/dashboard/posts" />
       </div>
+
+      {gained + lost > 0 || active.n > 0 ? (
+        <section className="space-y-3 rounded-xl border p-5" aria-labelledby="growth-heading">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="growth-heading" className="font-medium">
+              Subscribers, last 30 days
+            </h2>
+            <p className="text-muted-foreground text-sm tabular-nums">
+              +{gained.toLocaleString("en")} new · −{lost.toLocaleString("en")} left
+            </p>
+          </div>
+          <SubscriberChart data={growth} />
+        </section>
+      ) : null}
 
       {steps.some((s) => !s.done) ? (
         <section className="space-y-3 rounded-xl border p-5">

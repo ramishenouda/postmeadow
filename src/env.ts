@@ -18,6 +18,8 @@ const schema = z
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
     // Tests only: point the Stripe SDK at stripe-mock, e.g. http://localhost:12111
     STRIPE_API_BASE: z.url().optional(),
+    // How often the scheduler checks for due and interrupted sends. 0 turns it off.
+    SCHEDULER_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
     // Directory for uploaded files (a persistent, backed-up volume in production).
     STORAGE_DIR: z.string().default("./storage"),
     // Max confirmation emails per publication per hour (backstop against sign-up abuse).
