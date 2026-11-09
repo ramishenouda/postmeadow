@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { SelectionMenu } from "./bubble-menu";
+import { ImageMenu, SelectionMenu } from "./bubble-menu";
 import { editorExtensions, IMAGE_FILES_EVENT, PICK_IMAGE_EVENT } from "./extensions";
 import { ImageDialog } from "./image-dialog";
 import { Toolbar } from "./toolbar";
@@ -126,6 +126,7 @@ export function RichEditor({
           <>
             <EditorContent editor={editor} />
             <SelectionMenu editor={editor} onLink={() => setLinkOpen(true)} />
+            <ImageMenu editor={editor} />
           </>
         ) : (
           <div className="text-muted-foreground min-h-[50vh] py-4">Loading editor…</div>

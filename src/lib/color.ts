@@ -27,3 +27,29 @@ export const MIN_ACCENT_CONTRAST = 4.5;
 export function accentIsReadable(hex: string): boolean {
   return HEX_COLOR.test(hex) && contrastRatio(hex, "#ffffff") >= MIN_ACCENT_CONTRAST;
 }
+
+/** Mixes two "#rrggbb" colours: t = 0 gives `a`, t = 1 gives `b`. */
+export function mixColors(a: string, b: string, t: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16);
+  return (
+    "#" +
+    [1, 3, 5]
+      .map((i) => Math.round(channel(a, i) * (1 - t) + channel(b, i) * t))
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+/**
+ * The accent, lightened just enough to be readable as text on a dark background
+ * (dark email designs). Accents are checked against white, so most are too dark
+ * to use as-is on black.
+ */
+export function accentOnDark(accent: string, background: string, min = 4.5): string {
+  if (!HEX_COLOR.test(accent)) return "#ffffff";
+  for (let t = 0; t <= 1; t += 0.05) {
+    const candidate = mixColors(accent, "#ffffff", t);
+    if (contrastRatio(candidate, background) >= min) return candidate;
+  }
+  return "#ffffff";
+}

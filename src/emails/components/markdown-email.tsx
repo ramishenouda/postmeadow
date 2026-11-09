@@ -1,11 +1,22 @@
-import { Heading, Hr, Img, Link, Text } from "@react-email/components";
+import {
+  Button,
+  Column,
+  Heading,
+  Hr,
+  Img,
+  Link,
+  Row,
+  Section,
+  Text,
+} from "@react-email/components";
 import type { CSSProperties } from "react";
 import { DEFAULT_ACCENT } from "@/lib/color";
-import type { MarkdownComponents } from "@/lib/markdown/render";
+import type { EmailDesign } from "@/lib/email-designs";
+import type { GalleryImage, MarkdownComponents } from "@/lib/markdown/render";
+import { emailTheme, type EmailTheme } from "../theme";
 
 /** Markdown → React Email. Every style is inline so Gmail/Outlook keep it. */
 
-const color = { text: "#292524", muted: "#57534e", border: "#e7e5e0" };
 const mono = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
 
 const headingSizes: Record<number, string> = {
@@ -17,47 +28,44 @@ const headingSizes: Record<number, string> = {
   6: "15px",
 };
 
-const cell = (align: string | null, header: boolean): CSSProperties => ({
-  border: `1px solid ${color.border}`,
-  padding: "6px 10px",
-  textAlign: (align ?? "left") as CSSProperties["textAlign"],
-  fontWeight: header ? 600 : 400,
-  fontSize: "14px",
-});
+/** Space between images in a row. */
+const GAP = 12;
 
-/** Components for a publication's brand. `accent` colours links. */
+/** Components for a publication's brand and chosen design. */
 export function createEmailMarkdownComponents({
   accent = DEFAULT_ACCENT,
-  accentHeadings = false,
+  design = "classic",
 }: {
   accent?: string;
-  /** Headings in the accent colour (the Magazine design). */
-  accentHeadings?: boolean;
+  design?: EmailDesign;
 } = {}): MarkdownComponents {
+  const t = emailTheme(design, accent);
+
+  const cell = (align: string | null, header: boolean): CSSProperties => ({
+    border: `1px solid ${t.border}`,
+    color: t.text,
+    padding: "6px 10px",
+    textAlign: (align ?? "left") as CSSProperties["textAlign"],
+    fontWeight: header ? 600 : 400,
+    fontSize: "14px",
+  });
+
   return {
     paragraph: ({ children }) => (
-      <Text style={{ color: color.text, fontSize: "16px", lineHeight: "26px", margin: "0 0 16px" }}>
+      <Text style={{ color: t.text, fontSize: "16px", lineHeight: "26px", margin: "0 0 16px" }}>
         {children}
       </Text>
     ),
     heading: ({ level, children }) => (
-      <Heading
-        as={`h${level}`}
-        style={{
-          color: accentHeadings ? accent : color.text,
-          fontSize: headingSizes[level],
-          lineHeight: 1.3,
-          margin: "28px 0 12px",
-        }}
-      >
+      <Heading as={`h${level}`} style={headingStyle(t, level)}>
         {children}
       </Heading>
     ),
     blockquote: ({ children }) => (
       <blockquote
         style={{
-          borderLeft: `3px solid ${color.border}`,
-          color: color.muted,
+          borderLeft: `3px solid ${t.quote}`,
+          color: t.muted,
           margin: "0 0 16px",
           padding: "0 0 0 16px",
         }}
@@ -67,7 +75,7 @@ export function createEmailMarkdownComponents({
     ),
     list: ({ ordered, start, children }) => {
       const style: CSSProperties = {
-        color: color.text,
+        color: t.text,
         fontSize: "16px",
         lineHeight: "26px",
         margin: "0 0 16px",
@@ -90,10 +98,10 @@ export function createEmailMarkdownComponents({
     code: ({ value }) => (
       <pre
         style={{
-          backgroundColor: "#f5f5f4",
-          border: `1px solid ${color.border}`,
+          backgroundColor: t.code.background,
+          border: `1px solid ${t.border}`,
           borderRadius: "6px",
-          color: color.text,
+          color: t.code.color,
           fontFamily: mono,
           fontSize: "13px",
           lineHeight: "20px",
@@ -110,8 +118,9 @@ export function createEmailMarkdownComponents({
     inlineCode: ({ value }) => (
       <code
         style={{
-          backgroundColor: "#f5f5f4",
+          backgroundColor: t.code.background,
           borderRadius: "4px",
+          color: t.code.color,
           fontFamily: mono,
           fontSize: "0.9em",
           padding: "1px 4px",
@@ -120,24 +129,20 @@ export function createEmailMarkdownComponents({
         {value}
       </code>
     ),
-    thematicBreak: () => <Hr style={{ borderColor: color.border, margin: "28px 0" }} />,
+    thematicBreak: () => <Hr style={{ borderColor: t.border, margin: "28px 0" }} />,
     link: ({ href, children }) => (
-      <Link href={href} style={{ color: accent, textDecoration: "underline" }}>
+      <Link href={href} style={{ color: t.link, textDecoration: "underline" }}>
         {children}
       </Link>
     ),
+    // Images normally arrive through `gallery` (even a lone one). This covers images
+    // inside text, e.g. an icon in the middle of a sentence.
     image: ({ src, alt, title }) => (
       <Img
         src={src}
         alt={alt}
         title={title ?? undefined}
-        style={{
-          border: 0,
-          display: "block",
-          height: "auto",
-          margin: "0 0 16px",
-          maxWidth: "100%",
-        }}
+        style={{ border: 0, display: "inline-block", height: "auto", maxWidth: "100%" }}
       />
     ),
     emphasis: ({ children }) => <em>{children}</em>,
@@ -149,7 +154,7 @@ export function createEmailMarkdownComponents({
         cellPadding={0}
         cellSpacing={0}
         role="presentation"
-        style={{ borderCollapse: "collapse", color: color.text, margin: "0 0 16px", width: "100%" }}
+        style={{ borderCollapse: "collapse", color: t.text, margin: "0 0 16px", width: "100%" }}
       >
         <tbody>
           {head.map((row, r) => (
@@ -173,8 +178,145 @@ export function createEmailMarkdownComponents({
         </tbody>
       </table>
     ),
+    button: ({ href, children }) => (
+      <Section style={{ margin: "8px 0 24px", textAlign: t.button.align }}>
+        <Button
+          href={href}
+          style={{
+            backgroundColor: t.button.background,
+            border: t.button.border,
+            borderRadius: t.button.radius,
+            color: t.button.color,
+            display: "inline-block",
+            fontSize: t.button.uppercase ? "13px" : "15px",
+            fontWeight: 700,
+            letterSpacing: t.button.uppercase ? "0.12em" : undefined,
+            lineHeight: "20px",
+            padding: "14px 28px",
+            textDecoration: "none",
+            textTransform: t.button.uppercase ? "uppercase" : undefined,
+          }}
+        >
+          {children}
+        </Button>
+      </Section>
+    ),
+    gallery: ({ rows }) => (
+      <Section style={{ margin: "8px 0 20px" }}>
+        {rows.map((row, r) =>
+          row.length === 1 ? (
+            <Figure key={r} image={row[0]} theme={t} />
+          ) : (
+            <Row key={r} style={{ marginBottom: r < rows.length - 1 ? `${GAP}px` : 0 }}>
+              {row.map((image, i) => {
+                const width = Math.floor((t.contentWidth - GAP * (row.length - 1)) / row.length);
+                return (
+                  <Column
+                    key={i}
+                    valign="top"
+                    // Gaps split so every column's content is the same width:
+                    // with 3 columns, 0+8 | 4+4 | 8+0.
+                    style={{
+                      paddingLeft: `${(GAP * i) / row.length}px`,
+                      paddingRight: `${(GAP * (row.length - 1 - i)) / row.length}px`,
+                      verticalAlign: "top",
+                      width: `${100 / row.length}%`,
+                    }}
+                  >
+                    <Figure image={image} theme={t} width={width} />
+                  </Column>
+                );
+              })}
+            </Row>
+          ),
+        )}
+      </Section>
+    ),
   };
 }
 
 /** Default (unbranded) components. */
 export const emailMarkdownComponents = createEmailMarkdownComponents();
+
+function headingStyle(t: EmailTheme, level: number): CSSProperties {
+  const h = t.heading;
+  if (h.h2Label && level === 2) {
+    // A spaced, small-caps section label with a hairline under it.
+    return {
+      borderBottom: `1px solid ${t.border}`,
+      color: h.color,
+      fontSize: "13px",
+      fontWeight: 600,
+      letterSpacing: "0.22em",
+      lineHeight: "20px",
+      margin: "36px 0 18px",
+      paddingBottom: "10px",
+      textAlign: "center",
+      textTransform: "uppercase",
+    };
+  }
+  return {
+    color: h.color,
+    fontFamily: h.font,
+    fontSize: h.uppercase && level === 2 ? "26px" : headingSizes[level],
+    fontWeight: h.weight,
+    letterSpacing: h.letterSpacing,
+    lineHeight: 1.25,
+    margin: "28px 0 12px",
+    textTransform: h.uppercase ? "uppercase" : undefined,
+  };
+}
+
+/** An image with an optional caption ("Name · $59"). `width` fixes it for Outlook. */
+function Figure({
+  image,
+  theme: t,
+  width,
+}: {
+  image: GalleryImage;
+  theme: EmailTheme;
+  width?: number;
+}) {
+  const [name, ...rest] = image.title?.split(" · ") ?? [];
+  const label = t.heading.h2Label; // the editorial (Boutique) caption style
+  return (
+    <>
+      <Img
+        src={image.src}
+        alt={image.alt}
+        width={width ? String(width) : undefined}
+        style={{
+          border: 0,
+          borderRadius: t.image.radius,
+          display: "block",
+          height: "auto",
+          maxWidth: "100%",
+          width: width ? "100%" : undefined,
+        }}
+      />
+      {name ? (
+        <Text
+          style={{
+            color: t.text,
+            fontSize: label ? "12px" : "14px",
+            letterSpacing: label ? "0.14em" : undefined,
+            lineHeight: "20px",
+            margin: "10px 0 0",
+            textAlign: label ? "center" : "left",
+            textTransform: label ? "uppercase" : undefined,
+          }}
+        >
+          <strong style={{ fontWeight: 600 }}>{name}</strong>
+          {rest.length ? (
+            <>
+              <br />
+              <span style={{ color: t.muted, letterSpacing: 0, textTransform: "none" }}>
+                {rest.join(" · ")}
+              </span>
+            </>
+          ) : null}
+        </Text>
+      ) : null}
+    </>
+  );
+}

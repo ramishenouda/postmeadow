@@ -21,7 +21,15 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
       },
       {
-        source: "/((?!embed/).*)",
+        // Email previews, shown in iframes by our own pages (templates, designs, landing).
+        source: "/previews/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
+      {
+        source: "/((?!embed/|previews/).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },

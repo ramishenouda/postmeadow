@@ -82,6 +82,15 @@ pipeline only ever sees the finished HTML and text.
 - [ ] **Before launch**: Free-plan sending limits (email cost scales with subscribers).
 - [x] **Email templates**: four email designs (Classic, Minimal, Letter, Magazine),
       five starter post templates, and saved templates per publication.
+- [x] **Colourful newsletters**: Boutique, Launch and Arcade designs (cover photos, dark
+      and neon themes); buttons (a link on its own line) and image rows with captions and
+      prices; starter templates for shops, tech and games with real photos
+      (`public/templates`, Pexels); per-post designs; live email previews in the template
+      gallery, design picker and landing page (`/previews/…`).
+- [x] **Invitations**: adding a subscriber sends an invitation to accept or decline
+      (answered on a page, so mail scanners can't answer); unanswered ones show as
+      Expired after 7 days and can be re-sent once; declining is final for the writer;
+      imports can invite instead of adding; daily invitation limits per plan.
 - [x] **What every competitor has**: scheduled sends (with an in-process scheduler
       that also resumes interrupted sends), embeddable signup forms, SEO basics
       (sitemap, robots, canonical), editing/unpublishing sent posts, growth chart.

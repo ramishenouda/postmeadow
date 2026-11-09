@@ -10,6 +10,8 @@ export type RenderablePost = {
   subtitle: string | null;
   content: string;
   contentFormat: string;
+  /** This post's own design; null or missing uses the publication's. */
+  emailDesign?: string | null;
 };
 
 export type RenderablePublication = {

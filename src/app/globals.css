@@ -156,3 +156,37 @@
   border: 1px solid var(--border);
   padding: 0.25rem 0.5rem;
 }
+
+/* Buttons and image rows, drawn as they'll appear in emails (see editor/blocks.ts). */
+.tiptap p.is-button a {
+  display: inline-block;
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+  padding: 0.6rem 1.4rem;
+  text-decoration: none;
+}
+.tiptap img {
+  border-radius: 0.5rem;
+}
+.tiptap img.in-row {
+  display: inline-block;
+  vertical-align: top;
+  margin: 0.5rem 0.75rem 0.5rem 0;
+}
+.tiptap img.in-row.row-end {
+  margin-right: 0;
+}
+.tiptap img.row-of-2 {
+  width: calc((100% - 0.75rem) / 2);
+}
+.tiptap img.row-of-3 {
+  width: calc((100% - 1.5rem) / 3);
+}
+
+/* Quotes: emails show a quote as written, so the web and the editor don't add marks. */
+.prose blockquote p:first-of-type::before,
+.prose blockquote p:last-of-type::after {
+  content: none;
+}

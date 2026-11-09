@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import { StatusBadge } from "@/components/status-badge";
 import { SubscriberChart } from "@/components/subscriber-chart";
 import { buttonVariants } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { subscriberGrowth } from "@/lib/growth";
+import { subscriberStateWhere } from "@/lib/subscribers";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -26,15 +27,18 @@ export default function DashboardPage() {
 async function Dashboard() {
   const { publication } = await requirePublication();
 
-  const countSubscribers = (status: "active" | "pending") =>
+  const countSubscribers = (where: SQL) =>
     db
       .select({ n: count() })
       .from(subscribers)
-      .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.status, status)));
+      .where(and(eq(subscribers.publicationId, publication.id), where));
 
   const [[active], [pending], [sentPosts], recent, growth] = await Promise.all([
-    countSubscribers("active"),
-    countSubscribers("pending"),
+    countSubscribers(subscriberStateWhere("active")),
+    // Still able to answer: invited, or signed up and not yet confirmed (not expired).
+    countSubscribers(
+      or(subscriberStateWhere("invited"), subscriberStateWhere("unconfirmed")) as SQL,
+    ),
     db
       .select({ n: count() })
       .from(posts)
@@ -110,9 +114,9 @@ async function Dashboard() {
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Stat label="Subscribers" value={active.n} href="/dashboard/subscribers?status=active" />
         <Stat
-          label="Awaiting confirmation"
+          label="Awaiting an answer"
           value={pending.n}
-          href="/dashboard/subscribers?status=pending"
+          href="/dashboard/subscribers?status=waiting"
         />
         <Stat label="Posts sent" value={sentPosts.n} href="/dashboard/posts" />
       </div>

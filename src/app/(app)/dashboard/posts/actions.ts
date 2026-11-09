@@ -14,7 +14,9 @@ import { getOwnedPost } from "@/lib/posts";
 import { processDeliveries, queuePost, sendTestEmail } from "@/lib/sending";
 import { SLUG_PATTERN } from "@/lib/slug";
 import { randomToken } from "@/lib/tokens";
-import { starterTemplate } from "@/lib/post-templates";
+import { env } from "@/env";
+import { isEmailDesign } from "@/lib/email-designs";
+import { starterContent, starterTemplate } from "@/lib/post-templates";
 
 const untitledSlug = () =>
   `untitled-${randomToken()
@@ -38,6 +40,7 @@ export async function createPostFrom(source: string) {
     subtitle: null as string | null,
     content: "",
     contentFormat: "markdown",
+    emailDesign: null as string | null,
   };
 
   if (source.startsWith("starter:")) {
@@ -47,7 +50,9 @@ export async function createPostFrom(source: string) {
         ...start,
         title: template.title,
         subtitle: template.subtitle || null,
-        content: template.content,
+        content: starterContent(template, env.APP_URL),
+        // A template made for a design brings it along (the writer can switch back).
+        emailDesign: template.design ?? null,
       };
     }
   } else if (source.startsWith("saved:")) {
@@ -64,6 +69,7 @@ export async function createPostFrom(source: string) {
         subtitle: template.subtitle,
         content: template.content,
         contentFormat: template.contentFormat,
+        emailDesign: template.emailDesign,
       };
     }
   }
@@ -100,8 +106,24 @@ export async function saveAsTemplate(postId: string, name: string): Promise<Acti
     subtitle: post.subtitle,
     content: post.content,
     contentFormat: post.contentFormat,
+    emailDesign: post.emailDesign,
   });
   return { ok: true, message: `Saved as template “${cleanName}”. Find it under New post.` };
+}
+
+/** Give one post its own email design, or (null) go back to the publication's. */
+export async function setPostDesign(postId: string, design: string | null): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  if (design !== null && !isEmailDesign(design)) return { ok: false, error: "Unknown design." };
+  if (owned.post.status === "sent" || owned.post.status === "sending") {
+    return { ok: false, error: "This post has already been sent." };
+  }
+  await db
+    .update(posts)
+    .set({ emailDesign: design, updatedAt: new Date() })
+    .where(eq(posts.id, owned.post.id));
+  return { ok: true, message: "Design updated." };
 }
 
 export async function deleteTemplate(templateId: string): Promise<ActionResult> {

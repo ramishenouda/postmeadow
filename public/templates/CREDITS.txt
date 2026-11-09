@@ -1,0 +1,19 @@
+Photos used by the starter templates and the landing page.
+
+All from Pexels (https://www.pexels.com), free to use under the Pexels License
+(https://www.pexels.com/license/): commercial use allowed, attribution not required.
+Cropped and compressed for email. Source pages:
+
+fashion/hero.jpg       https://www.pexels.com/photo/9968540/
+fashion/knit.jpg       https://www.pexels.com/photo/5704187/
+fashion/jackets.jpg    https://www.pexels.com/photo/7679725/
+fashion/coat.jpg       https://www.pexels.com/photo/14416556/
+fashion/rack.jpg       https://www.pexels.com/photo/3858268/
+tech/hero.jpg          https://www.pexels.com/photo/30469972/
+tech/phone.jpg         https://www.pexels.com/photo/16168372/
+tech/code.jpg          https://www.pexels.com/photo/10845119/
+tech/editor.jpg        https://www.pexels.com/photo/6424584/
+gaming/hero.jpg        https://www.pexels.com/photo/7858743/
+gaming/controller.jpg  https://www.pexels.com/photo/596750/
+gaming/player.jpg      https://www.pexels.com/photo/34697345/
+gaming/setup.jpg       https://www.pexels.com/photo/38498457/

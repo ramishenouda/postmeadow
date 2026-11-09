@@ -3,6 +3,7 @@ import Papa from "papaparse";
 import { db } from "@/db";
 import { subscribers } from "@/db/schema";
 import { getPublicationForUser, getSession } from "@/lib/dal";
+import { subscriberState } from "@/lib/subscribers";
 
 export async function GET() {
   const session = await getSession();
@@ -14,6 +15,8 @@ export async function GET() {
     .select({
       email: subscribers.email,
       status: subscribers.status,
+      invitedAt: subscribers.invitedAt,
+      confirmSentAt: subscribers.confirmSentAt,
       created_at: subscribers.createdAt,
       confirmed_at: subscribers.confirmedAt,
       unsubscribed_at: subscribers.unsubscribedAt,
@@ -23,8 +26,10 @@ export async function GET() {
     .orderBy(asc(subscribers.createdAt));
 
   const csv = Papa.unparse(
-    rows.map((r) => ({
+    rows.map(({ invitedAt, confirmSentAt, ...r }) => ({
       ...r,
+      // As shown in the dashboard: invited, unconfirmed and expired instead of "pending".
+      status: subscriberState({ status: r.status, invitedAt, confirmSentAt }),
       created_at: r.created_at.toISOString(),
       confirmed_at: r.confirmed_at?.toISOString() ?? "",
       unsubscribed_at: r.unsubscribed_at?.toISOString() ?? "",

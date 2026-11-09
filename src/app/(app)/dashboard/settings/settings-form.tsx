@@ -74,11 +74,7 @@ export function SettingsForm({ address, values }: { address: string; values: Val
 
       <Branding initial={v} errors={errors} />
 
-      <EmailDesignPicker
-        initial={v.emailDesign}
-        accent={HEX_COLOR.test(v.accentColor) ? v.accentColor : DEFAULT_ACCENT}
-        error={errors.emailDesign}
-      />
+      <EmailDesignPicker initial={v.emailDesign} error={errors.emailDesign} />
 
       <Card>
         <CardHeader>

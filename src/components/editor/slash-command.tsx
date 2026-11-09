@@ -6,6 +6,7 @@ import { ReactRenderer } from "@tiptap/react";
 import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
 import {
   CodeXml,
+  MousePointerClick,
   Heading2,
   Heading3,
   ImagePlus,
@@ -26,6 +27,8 @@ export type SlashItem = {
   keywords: string[];
   run: (editor: Editor, range: Range) => void;
 };
+
+const BUTTON_LABEL = "Button text";
 
 /** Every block "/" can insert. Each removes the typed "/query" first. */
 export function slashItems(onPickImage: (editor: Editor) => void): SlashItem[] {
@@ -74,6 +77,27 @@ export function slashItems(onPickImage: (editor: Editor) => void): SlashItem[] {
       run: (e, r) => {
         start(e, r).run();
         onPickImage(e);
+      },
+    },
+    {
+      title: "Button",
+      description: "A link that stands out",
+      icon: MousePointerClick,
+      keywords: ["button", "cta", "call to action", "shop", "link"],
+      // A paragraph that is only a link is shown as a button (see blocks.ts).
+      // The label is selected, so typing replaces it; the link popover sets the address.
+      run: (e, r) => {
+        start(e, r)
+          .insertContent({
+            type: "text",
+            text: BUTTON_LABEL,
+            marks: [{ type: "link", attrs: { href: "https://example.com" } }],
+          })
+          .run();
+        const to = e.state.selection.from;
+        e.chain()
+          .setTextSelection({ from: to - BUTTON_LABEL.length, to })
+          .run();
       },
     },
     {

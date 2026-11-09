@@ -54,6 +54,8 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         activeSubscribers={active}
         ownerEmail={user.email}
         scheduledAt={post.status === "scheduled" ? (post.scheduledAt?.toISOString() ?? null) : null}
+        design={post.emailDesign}
+        defaultDesign={publication.emailDesign}
       />
     );
   }

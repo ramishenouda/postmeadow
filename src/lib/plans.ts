@@ -8,14 +8,30 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 export const PLANS = {
-  free: { name: "Free", storageBytes: 500 * MB, tagline: "Everything you need to start." },
-  pro: { name: "Pro", storageBytes: 10 * GB, tagline: "For writers with a growing list." },
+  free: {
+    name: "Free",
+    storageBytes: 500 * MB,
+    invitesPerDay: 100,
+    tagline: "Everything you need to start.",
+  },
+  pro: {
+    name: "Pro",
+    storageBytes: 10 * GB,
+    invitesPerDay: 1_000,
+    tagline: "For writers with a growing list.",
+  },
   business: {
     name: "Business",
     storageBytes: 50 * GB,
+    invitesPerDay: 5_000,
     tagline: "For teams and image-heavy newsletters.",
   },
 } as const;
+
+/** Invitation emails a publication may send per 24 hours (they go to people who haven't opted in). */
+export function invitesPerDay(plan: string): number {
+  return (isPlanId(plan) ? PLANS[plan] : PLANS.free).invitesPerDay;
+}
 
 export type PlanId = keyof typeof PLANS;
 export type PaidPlanId = Exclude<PlanId, "free">;

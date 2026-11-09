@@ -53,10 +53,11 @@ export const publications = pgTable(
 // ─── Subscribers ─────────────────────────────────────────────────────────────
 
 export const subscriberStatus = pgEnum("subscriber_status", [
-  "pending", // signed up, hasn't clicked the confirmation link yet
+  "pending", // signed up or invited, hasn't answered yet (expires: see src/lib/subscribers.ts)
   "active",
   "unsubscribed",
   "bounced",
+  "declined", // said "no thanks" to a writer's invitation; can't be invited again
 ]);
 
 export const subscribers = pgTable(
@@ -77,6 +78,10 @@ export const subscribers = pgTable(
     unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
     // Why the status last changed when it wasn't the reader's own click, e.g. a hard bounce.
     statusReason: text("status_reason"),
+    // Set when the writer invited them (rather than them signing up): the last invitation.
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    // Invitations sent to this address, capped so writers can't pester people.
+    inviteCount: integer("invite_count").notNull().default(0),
     ...timestamps,
   },
   (t) => [
@@ -114,6 +119,8 @@ export const posts = pgTable(
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
     // A sent post the writer took off the web (archive, feed, sitemap). Emails stay sent.
     webHidden: boolean("web_hidden").notNull().default(false),
+    // This post's email design (src/lib/email-designs.ts). Null: the publication's.
+    emailDesign: text("email_design"),
     ...timestamps,
   },
   (t) => [
@@ -248,6 +255,8 @@ export const postTemplates = pgTable(
     subtitle: text("subtitle"),
     contentFormat: text("content_format").notNull().default("markdown"),
     content: text("content").notNull().default(""),
+    // The design of the post it was saved from, if that post had its own.
+    emailDesign: text("email_design"),
     ...timestamps,
   },
   (t) => [index("post_templates_publication_idx").on(t.publicationId)],

@@ -41,6 +41,7 @@ function ImageForm({ editor, onDone }: { editor: Editor | null; onDone: () => vo
   const [mode, setMode] = useState<"upload" | "link">("upload");
   const [src, setSrc] = useState("");
   const [alt, setAlt] = useState("");
+  const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -70,7 +71,11 @@ function ImageForm({ editor, onDone }: { editor: Editor | null; onDone: () => vo
       );
       return;
     }
-    editor?.chain().focus().setImage({ src: src.trim(), alt: alt.trim() }).run();
+    editor
+      ?.chain()
+      .focus()
+      .setImage({ src: src.trim(), alt: alt.trim(), title: caption.trim() || undefined })
+      .run();
     onDone();
   };
 
@@ -198,6 +203,21 @@ function ImageForm({ editor, onDone }: { editor: Editor | null; onDone: () => vo
           onChange={(e) => setAlt(e.target.value)}
           placeholder="What the image shows (for screen readers, and when images are off)"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="image-caption">Caption (optional)</Label>
+        <Input
+          id="image-caption"
+          value={caption}
+          maxLength={120}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Shown under the image, e.g. Linen shirt · $59"
+        />
+        <p className="text-muted-foreground text-xs">
+          Tip: put two or three images one after another and they sit side by side, like a row of
+          products.
+        </p>
       </div>
 
       <DialogFooter>

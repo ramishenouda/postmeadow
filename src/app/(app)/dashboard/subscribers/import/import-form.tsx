@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,25 @@ import { importSubscribers, type ImportState } from "../actions";
 
 export function ImportForm() {
   const [state, formAction, pending] = useActionState<ImportState, FormData>(importSubscribers, {});
+  const [mode, setMode] = useState<"subscribed" | "invite">("subscribed");
 
   if (state.result) {
-    const { added, existing, invalid, invalidSamples } = state.result;
+    const { mode: done, added, existing, invalid, invalidSamples } = state.result;
+    const people = `${added.toLocaleString("en")} ${added === 1 ? "person" : "people"}`;
     return (
       <Card>
         <CardContent className="space-y-4">
           <p className="text-lg font-medium" role="status">
-            Imported {added.toLocaleString("en")} {added === 1 ? "subscriber" : "subscribers"}
+            {done === "invited"
+              ? `Sending invitations to ${people}`
+              : `Imported ${added.toLocaleString("en")} ${added === 1 ? "subscriber" : "subscribers"}`}
           </p>
+          {done === "invited" ? (
+            <p className="text-muted-foreground text-sm">
+              They&apos;re listed as Invited until they answer. Invitations nobody answers expire
+              after 7 days.
+            </p>
+          ) : null}
           <ul className="text-muted-foreground space-y-1 text-sm">
             <li>{existing.toLocaleString("en")} already on your list (skipped)</li>
             <li>
@@ -54,20 +64,57 @@ export function ImportForm() {
               placeholder={"ada@example.com\ngrace@example.com"}
             />
           </div>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" name="consent" required className="mt-0.5" />
-            <span>
-              Everyone on this list agreed to receive emails from me. They&apos;ll be added as
-              confirmed, without a confirmation email.
-            </span>
-          </label>
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-sm font-medium">How should they be added?</legend>
+            {(
+              [
+                [
+                  "subscribed",
+                  "They already subscribed",
+                  "For a list you're bringing from another service. They're added straight away, with no email.",
+                ],
+                [
+                  "invite",
+                  "Send them an invitation",
+                  "Each person gets an email to accept or decline. Only those who accept are subscribed.",
+                ],
+              ] as const
+            ).map(([value, title, body]) => (
+              <label
+                key={value}
+                className="has-checked:border-primary has-checked:bg-primary/5 flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm"
+              >
+                <input
+                  type="radio"
+                  name="mode"
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => setMode(value)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block font-medium">{title}</span>
+                  <span className="text-muted-foreground">{body}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {mode === "subscribed" ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="consent" required className="mt-0.5" />
+              <span>
+                Everyone on this list agreed to receive emails from me. They&apos;ll be added as
+                confirmed, without a confirmation email.
+              </span>
+            </label>
+          ) : null}
           {state.error ? (
             <p className="text-destructive text-sm" role="alert">
               {state.error}
             </p>
           ) : null}
           <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Importing…" : "Import"}
+            {pending ? "Importing…" : mode === "invite" ? "Import and invite" : "Import"}
           </Button>
         </form>
       </CardContent>

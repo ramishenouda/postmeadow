@@ -148,13 +148,30 @@ describe("public page and double opt-in", () => {
 });
 
 describe("subscriber admin", () => {
-  test("manual add, and duplicates are rejected", async () => {
+  test("adding someone invites them; they're subscribed once they accept", async () => {
+    await mail.clear();
     const add = () =>
       owner.formAction("/dashboard/subscribers", "subscribers/actions", "addSubscriber", {
         email: "manual@example.com",
       });
     assert.equal((await add()).result.ok, true);
     assert.match((await add()).result.error, /already/);
+    assert.equal(
+      await scalar(sql`select status from subscribers where email = 'manual@example.com'`),
+      "pending",
+    );
+
+    const invitation = await mail.waitFor("manual@example.com", "invited");
+    const token = new URL(linkIn(invitation, "/invite/")).pathname.split("/").pop()!;
+    await new Client().action(`/invite/${token}`, "invite/[token]/actions", "respondToInvitation", [
+      token,
+      "accept",
+    ]);
+    assert.equal(
+      await scalar(sql`select status from subscribers where email = 'manual@example.com'`),
+      "active",
+    );
+    await mail.waitFor("manual@example.com", "Welcome");
   });
 
   test("CSV import counts added, existing and invalid", async () => {

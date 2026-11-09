@@ -1,4 +1,26 @@
-import type { MarkdownComponents } from "@/lib/markdown/render";
+import type { GalleryImage, MarkdownComponents } from "@/lib/markdown/render";
+import { cn } from "@/lib/utils";
+
+/** "Linen shirt · $59" → name in bold, the rest (a price, a note) after it. */
+export function Caption({ title }: { title: string }) {
+  const [name, ...rest] = title.split(" · ");
+  return (
+    <figcaption className="not-prose mt-2 text-sm leading-5">
+      <span className="text-foreground font-medium">{name}</span>
+      {rest.length ? <span className="text-muted-foreground"> · {rest.join(" · ")}</span> : null}
+    </figcaption>
+  );
+}
+
+function Figure({ image }: { image: GalleryImage }) {
+  return (
+    <figure className="m-0">
+      {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external images */}
+      <img src={image.src} alt={image.alt} className="m-0 w-full" />
+      {image.title ? <Caption title={image.title} /> : null}
+    </figure>
+  );
+}
 
 /** Markdown → plain semantic HTML, styled by Tailwind Typography (`prose`). */
 export const webComponents: MarkdownComponents = {
@@ -61,5 +83,35 @@ export const webComponents: MarkdownComponents = {
         ))}
       </tbody>
     </table>
+  ),
+  // The brand colour comes from --brand (set by <Brand>), else the app's primary.
+  button: ({ href, children }) => (
+    <p className="not-prose my-7">
+      <a
+        href={href}
+        rel="noopener noreferrer nofollow"
+        className="inline-block rounded-lg bg-(--brand,var(--primary)) px-6 py-3 font-semibold text-white no-underline shadow-sm transition hover:opacity-90"
+      >
+        {children}
+      </a>
+    </p>
+  ),
+  gallery: ({ rows }) => (
+    <div className="my-8 space-y-4">
+      {rows.map((row, r) => (
+        <div
+          key={r}
+          className={cn(
+            "grid gap-4",
+            row.length === 2 && "grid-cols-2",
+            row.length === 3 && "grid-cols-2 sm:grid-cols-3",
+          )}
+        >
+          {row.map((image, i) => (
+            <Figure key={i} image={image} />
+          ))}
+        </div>
+      ))}
+    </div>
   ),
 };

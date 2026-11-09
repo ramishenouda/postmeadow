@@ -14,8 +14,10 @@ import {
   Text,
 } from "@react-email/components";
 import type { CSSProperties, ReactNode } from "react";
-import { DEFAULT_ACCENT } from "@/lib/color";
+import { accentOnDark, DEFAULT_ACCENT, mixColors } from "@/lib/color";
 import type { EmailDesign } from "@/lib/email-designs";
+import type { GalleryImage } from "@/lib/markdown/render";
+import { ARCADE, emailFonts, emailTheme, LAUNCH_NIGHT } from "./theme";
 
 export type NewsletterEmailProps = {
   publicationName: string;
@@ -33,13 +35,15 @@ export type NewsletterEmailProps = {
   senderName?: string;
   /** Dateline for Letter and Magazine. */
   date?: Date;
+  /**
+   * The post's opening image, for designs that show a cover photo above the title
+   * (EMAIL_DESIGNS[design].hero). The renderer takes it out of the body.
+   */
+  hero?: GalleryImage | null;
   children: ReactNode;
 };
 
-const fonts = {
-  sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
-};
+const fonts = emailFonts;
 
 const ink = { text: "#1c1917", soft: "#57534e", muted: "#78716c", rule: "#e7e5e0" };
 
@@ -56,6 +60,7 @@ type Shared = Required<
     logoUrl: string | null;
     accent: string;
     date: Date;
+    hero: GalleryImage | null;
   };
 
 /** Every issue's frame. The body (children) is the same Markdown in every design. */
@@ -64,6 +69,7 @@ export default function NewsletterEmail({
   brand,
   design = "classic",
   date = new Date(),
+  hero,
   ...props
 }: NewsletterEmailProps) {
   const font = brand?.fontStyle === "serif" ? fonts.serif : fonts.sans;
@@ -73,9 +79,18 @@ export default function NewsletterEmail({
     logoUrl: brand?.logoUrl ?? null,
     accent: brand?.accent ?? DEFAULT_ACCENT,
     date,
+    hero: hero ?? null,
   };
-  const Layout = { classic: Classic, minimal: Minimal, letter: Letter, magazine: Magazine }[design];
-  const background = design === "letter" ? "#f5f5f4" : "#ffffff";
+  const Layout = {
+    classic: Classic,
+    minimal: Minimal,
+    letter: Letter,
+    magazine: Magazine,
+    boutique: Boutique,
+    launch: Launch,
+    arcade: Arcade,
+  }[design];
+  const background = emailTheme(design, shared.accent).page;
 
   return (
     <Html lang="en">
@@ -128,6 +143,7 @@ function Footer({
   align = "left",
   withWebLink = false,
   linkColor = ink.muted,
+  color = ink.muted,
 }: {
   publicationName: string;
   unsubscribeUrl: string;
@@ -135,12 +151,13 @@ function Footer({
   align?: CSSProperties["textAlign"];
   withWebLink?: boolean;
   linkColor?: string;
+  color?: string;
 }) {
   const link: CSSProperties = { color: linkColor, textDecoration: "underline" };
   return (
     <Text
       style={{
-        color: ink.muted,
+        color,
         fontSize: "12px",
         lineHeight: "18px",
         margin: 0,
@@ -318,6 +335,7 @@ function Magazine(p: Shared) {
           </Column>
         </Row>
       </Section>
+      {p.hero ? <Hero image={p.hero} width={608} /> : null}
       <Section
         style={{ border: `1px solid ${ink.rule}`, borderTop: "0", padding: "28px 24px 24px" }}
       >
@@ -349,6 +367,329 @@ function Magazine(p: Shared) {
         <Section>{p.children}</Section>
         <Hr style={{ borderColor: ink.rule, margin: "28px 0 16px" }} />
         <Footer {...p} withWebLink linkColor={p.accent} />
+      </Section>
+    </Container>
+  );
+}
+
+// ─── Cover photo, shared by the designs that have one ────────────────────────
+
+function Hero({
+  image,
+  width,
+  radius = "0",
+}: {
+  image: GalleryImage;
+  width: number;
+  radius?: string;
+}) {
+  return (
+    <Img
+      src={image.src}
+      alt={image.alt}
+      width={String(width)}
+      style={{
+        border: 0,
+        borderRadius: radius,
+        display: "block",
+        height: "auto",
+        maxWidth: "100%",
+        width: "100%",
+      }}
+    />
+  );
+}
+
+/** A row of solid colour bars, for Arcade's top edge. */
+function Stripes({ colors, height = 6 }: { colors: string[]; height?: number }) {
+  return (
+    <Row>
+      {colors.map((c) => (
+        <Column
+          key={c}
+          style={{
+            backgroundColor: c,
+            height: `${height}px`,
+            lineHeight: `${height}px`,
+            fontSize: 0,
+          }}
+        >
+          &nbsp;
+        </Column>
+      ))}
+    </Row>
+  );
+}
+
+// ─── Boutique: editorial, for shops and brands ───────────────────────────────
+
+function Boutique(p: Shared) {
+  const t = emailTheme("boutique", p.accent);
+  const label: CSSProperties = {
+    color: t.muted,
+    fontSize: "11px",
+    letterSpacing: "0.24em",
+    margin: 0,
+    textTransform: "uppercase",
+  };
+  return (
+    <Container style={{ maxWidth: "600px" }}>
+      <Section style={{ padding: "0 16px 14px", textAlign: "center" }}>
+        <Link href={p.webUrl} style={{ ...label, textDecoration: "underline" }}>
+          View in browser
+        </Link>
+      </Section>
+      <Section style={{ backgroundColor: t.surface }}>
+        <Section
+          style={{
+            borderBottom: `1px solid ${t.border}`,
+            padding: "30px 24px 26px",
+            textAlign: "center",
+          }}
+        >
+          {p.logoUrl ? (
+            <table role="presentation" align="center" cellPadding={0} cellSpacing={0}>
+              <tbody>
+                <tr>
+                  <td>
+                    <Masthead name={p.publicationName} url={p.publicationUrl} logoUrl={p.logoUrl} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          ) : (
+            <Link
+              href={p.publicationUrl}
+              style={{
+                color: t.heading.color,
+                fontFamily: fonts.didone,
+                fontSize: "28px",
+                letterSpacing: "0.28em",
+                textDecoration: "none",
+                textTransform: "uppercase",
+              }}
+            >
+              {p.publicationName}
+            </Link>
+          )}
+        </Section>
+        {p.hero ? <Hero image={p.hero} width={600} /> : null}
+        <Section style={{ padding: "40px 40px 8px", textAlign: "center" }}>
+          <Text style={label}>{dateline(p.date)}</Text>
+          <Heading
+            as="h1"
+            style={{
+              color: t.heading.color,
+              fontFamily: fonts.didone,
+              fontSize: "40px",
+              fontWeight: 400,
+              lineHeight: 1.1,
+              margin: "14px 0 12px",
+            }}
+          >
+            {p.title}
+          </Heading>
+          {p.subtitle ? (
+            <Text style={{ color: t.muted, fontSize: "17px", lineHeight: "26px", margin: 0 }}>
+              {p.subtitle}
+            </Text>
+          ) : null}
+          <Hr
+            style={{
+              border: "none",
+              borderTop: `1px solid ${t.heading.color}`,
+              margin: "26px auto 6px",
+              width: "40px",
+            }}
+          />
+        </Section>
+        <Section style={{ padding: "16px 40px 32px" }}>{p.children}</Section>
+      </Section>
+      <Section style={{ padding: "28px 24px 0", textAlign: "center" }}>
+        <Text
+          style={{
+            ...label,
+            color: t.heading.color,
+            fontFamily: fonts.didone,
+            fontSize: "14px",
+            marginBottom: "10px",
+          }}
+        >
+          {p.publicationName}
+        </Text>
+        <Footer {...p} align="center" color={t.muted} linkColor={t.muted} />
+      </Section>
+    </Container>
+  );
+}
+
+// ─── Launch: modern product news ─────────────────────────────────────────────
+
+function Launch(p: Shared) {
+  const t = emailTheme("launch", p.accent);
+  const glow = mixColors(p.accent, LAUNCH_NIGHT, 0.45);
+  const bright = accentOnDark(p.accent, LAUNCH_NIGHT);
+  return (
+    <Container style={{ maxWidth: "600px", padding: "0 8px" }}>
+      <Section
+        style={{
+          backgroundColor: LAUNCH_NIGHT,
+          backgroundImage: `radial-gradient(120% 140% at 100% 0%, ${glow} 0%, ${LAUNCH_NIGHT} 62%)`,
+          borderRadius: "16px 16px 0 0",
+          padding: "26px 32px 36px",
+        }}
+      >
+        <Row>
+          <Column>
+            <Masthead
+              name={p.publicationName}
+              url={p.publicationUrl}
+              logoUrl={p.logoUrl}
+              logoHeight={30}
+              color="#ffffff"
+              fontSize="15px"
+            />
+          </Column>
+          <Column align="right">
+            <Link
+              href={p.webUrl}
+              style={{ color: "#94a3b8", fontSize: "12px", textDecoration: "underline" }}
+            >
+              View in browser
+            </Link>
+          </Column>
+        </Row>
+        <Text
+          style={{
+            border: `1px solid ${mixColors(bright, LAUNCH_NIGHT, 0.5)}`,
+            borderRadius: "999px",
+            color: bright,
+            display: "inline-block",
+            fontSize: "12px",
+            fontWeight: 600,
+            letterSpacing: "0.04em",
+            lineHeight: "18px",
+            margin: "34px 0 14px",
+            padding: "3px 12px",
+          }}
+        >
+          ● {dateline(p.date)}
+        </Text>
+        <Heading
+          as="h1"
+          style={{
+            color: "#ffffff",
+            fontSize: "36px",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            lineHeight: 1.12,
+            margin: "0 0 12px",
+          }}
+        >
+          {p.title}
+        </Heading>
+        {p.subtitle ? (
+          <Text style={{ color: "#cbd5e1", fontSize: "18px", lineHeight: "27px", margin: 0 }}>
+            {p.subtitle}
+          </Text>
+        ) : null}
+      </Section>
+      {p.hero ? <Hero image={p.hero} width={584} /> : null}
+      <Section
+        style={{
+          backgroundColor: t.surface,
+          borderRadius: "0 0 16px 16px",
+          padding: "32px 24px 28px",
+        }}
+      >
+        {p.children}
+      </Section>
+      <Section style={{ padding: "24px 16px 0" }}>
+        <Footer {...p} align="center" withWebLink color={t.muted} linkColor={t.muted} />
+      </Section>
+    </Container>
+  );
+}
+
+// ─── Arcade: dark and neon, for games ────────────────────────────────────────
+
+function Arcade(p: Shared) {
+  const t = emailTheme("arcade", p.accent);
+  const neon = t.heading.color;
+  return (
+    <Container style={{ maxWidth: "600px" }}>
+      <Stripes colors={[p.accent, ARCADE.cyan, ARCADE.magenta]} />
+      <Section style={{ backgroundColor: ARCADE.surface, padding: "18px 28px" }}>
+        <Row>
+          <Column>
+            <Masthead
+              name={p.publicationName.toUpperCase()}
+              url={p.publicationUrl}
+              logoUrl={p.logoUrl}
+              logoHeight={30}
+              color="#ffffff"
+              fontSize="14px"
+            />
+          </Column>
+          <Column align="right">
+            <Link
+              href={p.webUrl}
+              style={{ color: t.muted, fontSize: "12px", textDecoration: "underline" }}
+            >
+              View in browser
+            </Link>
+          </Column>
+        </Row>
+      </Section>
+      {p.hero ? <Hero image={p.hero} width={600} /> : null}
+      <Section style={{ backgroundColor: ARCADE.surface, padding: "30px 28px 6px" }}>
+        <Text
+          style={{
+            color: ARCADE.cyan,
+            fontFamily: fonts.arcade,
+            fontSize: "14px",
+            letterSpacing: "0.16em",
+            margin: "0 0 10px",
+            textTransform: "uppercase",
+          }}
+        >
+          ▶ {dateline(p.date)}
+        </Text>
+        <Heading
+          as="h1"
+          style={{
+            color: "#ffffff",
+            fontFamily: fonts.arcade,
+            fontSize: "44px",
+            fontWeight: 400,
+            letterSpacing: "0.01em",
+            lineHeight: 1.02,
+            margin: "0 0 14px",
+            textTransform: "uppercase",
+          }}
+        >
+          {p.title}
+        </Heading>
+        {p.subtitle ? (
+          <Text style={{ color: t.text, fontSize: "18px", lineHeight: "27px", margin: 0 }}>
+            {p.subtitle}
+          </Text>
+        ) : null}
+        <Hr
+          style={{
+            border: "none",
+            borderTop: `3px solid ${neon}`,
+            margin: "22px 0 0",
+            width: "64px",
+          }}
+        />
+      </Section>
+      <Section style={{ backgroundColor: ARCADE.surface, padding: "20px 28px 28px" }}>
+        {p.children}
+      </Section>
+      <Stripes colors={[ARCADE.magenta, ARCADE.cyan, p.accent]} height={4} />
+      <Section style={{ padding: "24px 20px 8px" }}>
+        <Footer {...p} align="center" withWebLink color={t.muted} linkColor={neon} />
       </Section>
     </Container>
   );

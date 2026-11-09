@@ -2,15 +2,21 @@
 
 import { and, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import Papa from "papaparse";
 import { db } from "@/db";
 import { subscribers } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
-import { emailSchema } from "@/lib/subscribers";
+import { canRemove, emailSchema } from "@/lib/subscribers";
+import { createInvitations, inviteOne, sendInvitations } from "@/lib/invitations";
 import { randomToken } from "@/lib/tokens";
 
 export type AddSubscriberState = { ok?: boolean; error?: string; email?: string };
 
+/**
+ * "Add a subscriber" sends an invitation: the person is only subscribed once they
+ * accept (see src/lib/invitations.ts).
+ */
 export async function addSubscriber(
   _prev: AddSubscriberState,
   formData: FormData,
@@ -19,41 +25,33 @@ export async function addSubscriber(
   const raw = String(formData.get("email") ?? "");
   const parsed = emailSchema.safeParse(raw);
   if (!parsed.success) return { error: "Enter a valid email address.", email: raw };
-  const email = parsed.data;
 
-  const [existing] = await db
-    .select({ status: subscribers.status })
-    .from(subscribers)
-    .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.email, email)))
-    .limit(1);
-
-  if (existing?.status === "active")
-    return { error: `${email} is already subscribed.`, email: raw };
-  if (existing?.status === "unsubscribed" || existing?.status === "bounced") {
-    return {
-      error: `${email} ${existing.status === "bounced" ? "bounced" : "unsubscribed"}. They need to subscribe again themselves.`,
-      email: raw,
-    };
+  try {
+    const result = await inviteOne(publication, parsed.data);
+    if (!result.ok) return { error: result.error, email: raw };
+  } catch (error) {
+    console.error("invitation failed", error);
+    return { error: "We couldn't send the invitation. Try again in a moment.", email: raw };
   }
+  refresh();
+  return { ok: true, email: parsed.data };
+}
 
-  const now = new Date();
-  if (existing) {
-    // Pending → the owner vouches for them.
-    await db
-      .update(subscribers)
-      .set({ status: "active", confirmedAt: now, confirmToken: null })
-      .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.email, email)));
-  } else {
-    await db
-      .insert(subscribers)
-      .values({
-        publicationId: publication.id,
-        email,
-        status: "active",
-        confirmedAt: now,
-        unsubscribeToken: randomToken(),
-      })
-      .onConflictDoNothing();
+/** Re-send an invitation that expired unanswered. */
+export async function inviteAgain(subscriberId: string): Promise<{ ok: boolean; error?: string }> {
+  const { publication } = await requirePublication();
+  const [row] = await db
+    .select({ email: subscribers.email })
+    .from(subscribers)
+    .where(and(eq(subscribers.id, subscriberId), eq(subscribers.publicationId, publication.id)))
+    .limit(1);
+  if (!row) return { ok: false, error: "Subscriber not found." };
+  try {
+    const result = await inviteOne(publication, row.email);
+    if (!result.ok) return result;
+  } catch (error) {
+    console.error("invitation failed", error);
+    return { ok: false, error: "We couldn't send the invitation. Try again in a moment." };
   }
   refresh();
   return { ok: true };
@@ -61,6 +59,11 @@ export async function addSubscriber(
 
 export async function removeSubscriber(subscriberId: string) {
   const { publication } = await requirePublication();
+  const [row] = await db
+    .select({ status: subscribers.status, invitedAt: subscribers.invitedAt })
+    .from(subscribers)
+    .where(and(eq(subscribers.id, subscriberId), eq(subscribers.publicationId, publication.id)));
+  if (!row || !canRemove(row)) return;
   await db
     .delete(subscribers)
     .where(and(eq(subscribers.id, subscriberId), eq(subscribers.publicationId, publication.id)));
@@ -75,7 +78,14 @@ const INSERT_CHUNK = 1_000;
 
 export type ImportState = {
   error?: string;
-  result?: { added: number; existing: number; invalid: number; invalidSamples: string[] };
+  result?: {
+    /** "subscribed": added as confirmed. "invited": sent invitations instead. */
+    mode: "subscribed" | "invited";
+    added: number;
+    existing: number;
+    invalid: number;
+    invalidSamples: string[];
+  };
 };
 
 export async function importSubscribers(
@@ -83,8 +93,10 @@ export async function importSubscribers(
   formData: FormData,
 ): Promise<ImportState> {
   const { publication } = await requirePublication();
+  const mode = formData.get("mode") === "invite" ? "invited" : "subscribed";
 
-  if (formData.get("consent") !== "on") {
+  // Adding people as subscribed skips the invitation, so the writer vouches for them.
+  if (mode === "subscribed" && formData.get("consent") !== "on") {
     return { error: "Confirm that everyone on the list agreed to receive your emails." };
   }
 
@@ -115,8 +127,30 @@ export async function importSubscribers(
     }
   }
 
-  const now = new Date();
   const emails = [...valid];
+
+  if (mode === "invited") {
+    const created = await createInvitations(publication, emails);
+    if (!created.ok) return { error: created.error };
+    // Respond now; the emails go out in batches afterwards.
+    after(() =>
+      sendInvitations(publication, created.invited).catch((e) =>
+        console.error("invitations failed", e),
+      ),
+    );
+    refresh();
+    return {
+      result: {
+        mode,
+        added: created.invited.length,
+        existing: created.existing,
+        invalid,
+        invalidSamples,
+      },
+    };
+  }
+
+  const now = new Date();
   let added = 0;
   for (let i = 0; i < emails.length; i += INSERT_CHUNK) {
     const rows = emails.slice(i, i + INSERT_CHUNK).map((email) => ({
@@ -136,7 +170,7 @@ export async function importSubscribers(
   }
 
   refresh();
-  return { result: { added, existing: emails.length - added, invalid, invalidSamples } };
+  return { result: { mode, added, existing: emails.length - added, invalid, invalidSamples } };
 }
 
 /**

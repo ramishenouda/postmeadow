@@ -1,4 +1,13 @@
-import type { Definition, Nodes, Root, TableCell } from "mdast";
+import type {
+  Definition,
+  Image,
+  Link,
+  Nodes,
+  Paragraph,
+  Root,
+  RootContent,
+  TableCell,
+} from "mdast";
 import { Fragment, type ReactNode } from "react";
 
 /**
@@ -25,7 +34,14 @@ export type MarkdownComponents = {
   strikethrough: (p: WithChildren) => ReactNode;
   lineBreak: () => ReactNode;
   table: (p: { head: ReactNode[][]; rows: ReactNode[][]; align: TableAlign[] }) => ReactNode;
+  /** A paragraph that is just one link: shown as a button. */
+  button: (p: WithChildren & { href: string }) => ReactNode;
+  /** Images on their own: one per row alone, or side by side (2 or 3 per row). */
+  gallery: (p: { rows: GalleryImage[][] }) => ReactNode;
 };
+
+/** `title` is the caption ("Linen shirt · $59"), shown under the image. */
+export type GalleryImage = { src: string; alt: string; title: string | null };
 
 export type TableAlign = "left" | "right" | "center" | null;
 
@@ -40,6 +56,53 @@ export function safeLinkUrl(url: string): string | null {
 export function safeImageUrl(url: string): string | null {
   const trimmed = url.trim();
   return SAFE_IMAGE.test(trimmed) ? trimmed : null;
+}
+
+const isBlank = (n: Nodes) => (n.type === "text" && !n.value.trim()) || n.type === "break";
+
+/** The images of a paragraph made only of images (ignoring spaces), else null. */
+export function imageOnlyParagraph(node: RootContent): Image[] | null {
+  if (node.type !== "paragraph") return null;
+  const content = node.children.filter((c) => !isBlank(c));
+  if (content.length === 0 || !content.every((c) => c.type === "image")) return null;
+  return content as Image[];
+}
+
+/** The link of a paragraph that is just one link (a button), else null. */
+export function buttonParagraph(node: RootContent): Link | null {
+  if (node.type !== "paragraph") return null;
+  const content = (node as Paragraph).children.filter((c) => !isBlank(c));
+  const [only] = content;
+  return content.length === 1 && only.type === "link" && safeLinkUrl(only.url) ? only : null;
+}
+
+/** Splits n images into rows of 3, with 2s where a row of 1 would be left over. */
+export function galleryRows<T>(images: T[]): T[][] {
+  const rows: T[][] = [];
+  let rest = images;
+  while (rest.length > 0) {
+    const take = rest.length === 4 || rest.length === 2 ? 2 : 3;
+    rows.push(rest.slice(0, take));
+    rest = rest.slice(take);
+  }
+  return rows;
+}
+
+/**
+ * A post that opens with a single image: that image, and the rest of the post.
+ * Designs with a hero area show it above the title.
+ */
+export function splitHero(root: Root): { hero: GalleryImage | null; rest: Root } {
+  const [first, second] = root.children;
+  const images = first ? imageOnlyParagraph(first) : null;
+  const nextIsImage = second ? imageOnlyParagraph(second) !== null : false;
+  if (!images || images.length !== 1 || nextIsImage) return { hero: null, rest: root };
+  const src = safeImageUrl(images[0].url);
+  if (!src) return { hero: null, rest: root };
+  return {
+    hero: { src, alt: images[0].alt ?? "", title: images[0].title ?? null },
+    rest: { ...root, children: root.children.slice(1) },
+  };
 }
 
 export function renderMarkdownTree(root: Root, components: MarkdownComponents): ReactNode {
@@ -63,12 +126,47 @@ export function renderMarkdownTree(root: Root, components: MarkdownComponents): 
     return src ? c.image({ src, alt, title }) : null;
   }
 
+  /**
+   * Top-level blocks, with runs of image-only paragraphs gathered into galleries.
+   * (The editor stores side-by-side images as consecutive image paragraphs.)
+   */
+  function renderBlocks(nodes: RootContent[]): ReactNode[] {
+    const out: ReactNode[] = [];
+    for (let i = 0; i < nodes.length;) {
+      const run: GalleryImage[] = [];
+      let j = i;
+      for (let images; j < nodes.length && (images = imageOnlyParagraph(nodes[j])); j++) {
+        for (const image of images) {
+          const src = safeImageUrl(image.url);
+          if (src) run.push({ src, alt: image.alt ?? "", title: image.title ?? null });
+        }
+      }
+      // A lone image goes through the gallery too (a row of one), so it gets its caption.
+      if (run.length >= 1) {
+        out.push(<Fragment key={i}>{c.gallery({ rows: galleryRows(run) })}</Fragment>);
+        i = j;
+      } else {
+        out.push(<Fragment key={i}>{renderNode(nodes[i])}</Fragment>);
+        i += 1;
+      }
+    }
+    return out;
+  }
+
   function renderNode(node: Nodes): ReactNode {
     switch (node.type) {
       case "root":
-        return renderChildren(node.children);
-      case "paragraph":
+        return renderBlocks(node.children);
+      case "paragraph": {
+        const link = buttonParagraph(node);
+        if (link) {
+          return c.button({
+            href: safeLinkUrl(link.url)!,
+            children: renderChildren(link.children),
+          });
+        }
         return c.paragraph({ children: renderChildren(node.children) });
+      }
       case "heading":
         return c.heading({ level: node.depth, children: renderChildren(node.children) });
       case "blockquote":

@@ -11,6 +11,10 @@ import { hit, RateLimitError } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email/send";
 import { randomToken } from "@/lib/tokens";
 import { confirmUrl } from "@/lib/urls";
+import { CONFIRM_TTL_DAYS } from "./subscriber-state";
+
+// The rules for how a subscriber's state is shown live with the state itself.
+export * from "./subscriber-state";
 
 /** Don't send another confirmation to the same address more often than this. */
 const CONFIRM_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
@@ -22,8 +26,7 @@ const CONFIRMATIONS_PER_PUBLICATION = {
   limit: env.CONFIRMATIONS_PER_PUBLICATION_PER_HOUR,
   windowSeconds: 60 * 60,
 };
-/** Confirmation links stop working after this. */
-const CONFIRM_TOKEN_TTL = "7 days";
+const CONFIRM_TOKEN_TTL = `${CONFIRM_TTL_DAYS} days`;
 
 export const emailSchema = z
   .string()
@@ -46,8 +49,11 @@ export async function requestSubscription(publication: Publication, email: strin
 
   if (existing?.status === "active" || existing?.status === "bounced") return;
 
+  // Only for sign-ups still waiting: someone who declined an invitation a minute ago
+  // and now subscribes themselves must get their confirmation email.
   if (
-    existing?.confirmSentAt &&
+    existing?.status === "pending" &&
+    existing.confirmSentAt &&
     Date.now() - existing.confirmSentAt.getTime() < CONFIRM_RESEND_COOLDOWN_MS
   ) {
     return;
@@ -64,7 +70,14 @@ export async function requestSubscription(publication: Publication, email: strin
   if (existing) {
     await db
       .update(subscribers)
-      .set({ status: "pending", confirmToken: token, confirmSentAt: now, statusReason: null })
+      // Includes people who declined an invitation: subscribing themselves is their choice.
+      .set({
+        status: "pending",
+        confirmToken: token,
+        confirmSentAt: now,
+        statusReason: null,
+        invitedAt: null,
+      })
       .where(eq(subscribers.id, existing.id));
   } else {
     const inserted = await db

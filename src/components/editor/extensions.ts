@@ -5,6 +5,7 @@ import { TableKit } from "@tiptap/extension-table";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
+import { Blocks } from "./blocks";
 import { SlashCommand } from "./slash-command";
 import { ACCEPTED_IMAGE_TYPES } from "./upload";
 
@@ -59,6 +60,7 @@ export function editorExtensions(placeholder: string): AnyExtension[] {
       onPaste: (editor, files) =>
         editor.view.dom.dispatchEvent(new CustomEvent(IMAGE_FILES_EVENT, { detail: { files } })),
     }),
+    Blocks,
     SlashCommand.configure({
       onPickImage: (editor) => editor.view.dom.dispatchEvent(new CustomEvent(PICK_IMAGE_EVENT)),
     }),

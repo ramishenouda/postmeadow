@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Brand, Logo } from "@/components/brand";
+import { Brand, Logo, Monogram } from "@/components/brand";
 import { formatDate } from "@/lib/format";
 import { getPublicPublication, getPublishedPosts, getReaderCount } from "@/lib/public-data";
 import { SubscribeForm } from "./subscribe-form";
@@ -116,18 +116,6 @@ async function Publication({ params }: Pick<PageProps<"/[slug]">, "params">) {
         </section>
       </div>
     </Brand>
-  );
-}
-
-/** A stand-in for a logo: the publication's initial on its accent colour. */
-function Monogram({ name }: { name: string }) {
-  return (
-    <span
-      aria-hidden
-      className="flex size-14 items-center justify-center rounded-2xl bg-(--accent) text-2xl font-semibold text-white shadow-sm"
-    >
-      {name.trim().charAt(0).toUpperCase()}
-    </span>
   );
 }
 

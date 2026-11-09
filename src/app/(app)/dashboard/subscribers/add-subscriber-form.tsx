@@ -14,7 +14,7 @@ export function AddSubscriberForm() {
   return (
     <form action={formAction} className="space-y-2 rounded-xl border p-4">
       <label htmlFor="add-email" className="text-sm font-medium">
-        Add a subscriber
+        Invite a subscriber
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
@@ -28,7 +28,7 @@ export function AddSubscriberForm() {
           className="h-9 sm:max-w-sm"
         />
         <Button type="submit" className="h-9" disabled={pending}>
-          {pending ? "Adding…" : "Add"}
+          {pending ? "Sending…" : "Send invitation"}
         </Button>
       </div>
       {state.error ? (
@@ -38,8 +38,8 @@ export function AddSubscriberForm() {
       ) : (
         <p className="text-muted-foreground text-sm" role="status">
           {state.ok
-            ? "Added. They'll get your next post."
-            : "Added as confirmed, so only add people who asked to hear from you."}
+            ? `Invitation sent to ${state.email}. They're subscribed once they accept.`
+            : "We'll email them an invitation to accept or decline. Unanswered invitations expire after 7 days."}
         </p>
       )}
     </form>

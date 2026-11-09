@@ -1,7 +1,16 @@
 /** Email designs, starter templates and saved templates. */
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
-import { Client, createDraft, createOwner, mail, resetDatabase, scalar, sql } from "./helpers";
+import {
+  BASE,
+  Client,
+  createDraft,
+  createOwner,
+  mail,
+  resetDatabase,
+  scalar,
+  sql,
+} from "./helpers";
 
 let owner: Client;
 let publicationId: string;
@@ -89,7 +98,97 @@ describe("email designs", () => {
   test("Settings shows the picker with the current design selected", async () => {
     const html = await owner.page("/dashboard/settings");
     assert.match(html, /Email design/);
-    assert.match(html, /role="radio" aria-checked="true"[^>]*>[\s\S]*?Magazine/);
+    assert.match(html, /role="radio" aria-checked="true" aria-label="Magazine"/);
+    // Each design shows a live preview with the writer's name.
+    assert.match(html, /src="\/previews\/mine\?design=arcade"/);
+  });
+});
+
+describe("colourful designs", () => {
+  test("Boutique, Launch and Arcade put the cover photo above the title", async () => {
+    for (const [design, marker] of [
+      ["boutique", /Didot/],
+      ["launch", /background-color:#0b1120/],
+      ["arcade", /background-color:#120f24/],
+    ] as const) {
+      await saveSettings({ emailDesign: design });
+      const title = `${design} issue`;
+      const id = await createDraft(
+        owner,
+        title,
+        `${design}-issue`,
+        "![Cover](https://example.com/cover.jpg)\n\nHello there.\n\n[Shop now](https://example.com/shop)",
+      );
+      await mail.clear();
+      await owner.action(`/dashboard/posts/${id}`, "posts/actions", "sendTest", [id]);
+      const html = (await mail.waitFor("design@example.com", title)).HTML;
+      assert.match(html, marker, design);
+      // The cover comes out of the body: above the title (Launch: under its dark title
+      // header), and before the text. The lone link is a button.
+      const cover = html.indexOf("cover.jpg");
+      // (lastIndexOf: the text also appears in the hidden inbox preview line at the top.)
+      assert.ok(cover < html.lastIndexOf("Hello there."), `${design}: cover should lead the body`);
+      if (design !== "launch") {
+        assert.ok(cover < html.indexOf(`>${title}<`), `${design}: cover should come first`);
+      }
+      assert.match(html, /<a[^>]*href="https:\/\/example.com\/shop"[^>]*padding/);
+    }
+    await saveSettings({ emailDesign: "classic" });
+  });
+
+  test("a post can use its own design", async () => {
+    const id = await createDraft(owner, "Own design", "own-design", "Hi");
+    const set = await owner.action(`/dashboard/posts/${id}`, "posts/actions", "setPostDesign", [
+      id,
+      "arcade",
+    ]);
+    assert.equal(set.result.ok, true, JSON.stringify(set.result));
+    await mail.clear();
+    await owner.action(`/dashboard/posts/${id}`, "posts/actions", "sendTest", [id]);
+    const html = (await mail.waitFor("design@example.com", "Own design")).HTML;
+    assert.match(html, /background-color:#120f24/);
+
+    const bad = await owner.action(`/dashboard/posts/${id}`, "posts/actions", "setPostDesign", [
+      id,
+      "comic-sans",
+    ]);
+    assert.equal(bad.result.ok, false);
+    const back = await owner.action(`/dashboard/posts/${id}`, "posts/actions", "setPostDesign", [
+      id,
+      null,
+    ]);
+    assert.equal(back.result.ok, true);
+    const [row] = await sql`select email_design from posts where id = ${id}`;
+    assert.equal(row.email_design, null);
+  });
+});
+
+describe("previews", () => {
+  test("example emails are public and only frameable by us", async () => {
+    const res = await new Client().fetch("/previews/examples/new-collection");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("x-frame-options"), "SAMEORIGIN");
+    const html = await res.text();
+    assert.match(html, /Fern &amp; Field|FERN &amp; FIELD/);
+    assert.match(html, new RegExp(`${BASE}/templates/fashion/hero.jpg`));
+    assert.equal((await new Client().fetch("/previews/examples/nope")).status, 404);
+    // Everything else still refuses to be framed.
+    assert.equal((await new Client().fetch("/pricing")).headers.get("x-frame-options"), "DENY");
+  });
+
+  test("the photos the templates use are served", async () => {
+    const res = await new Client().fetch("/templates/gaming/hero.jpg");
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/jpeg");
+  });
+
+  test("personal previews need a session and use the writer's name", async () => {
+    assert.equal((await new Client().fetch("/previews/mine?design=arcade")).status, 401);
+    const res = await owner.fetch("/previews/mine?design=arcade");
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /DESIGN NOTES/);
+    assert.equal((await owner.fetch("/previews/mine?template=game-update")).status, 200);
+    assert.equal((await owner.fetch("/previews/mine?template=nope")).status, 404);
   });
 });
 
@@ -103,6 +202,9 @@ describe("starter templates", () => {
       "Personal letter",
       "Link digest",
       "Interview",
+      "New collection",
+      "Product launch",
+      "Game update",
     ]) {
       assert.ok(html.includes(name), `missing: ${name}`);
     }
@@ -121,6 +223,20 @@ describe("starter templates", () => {
     assert.equal(post.status, "draft");
     assert.match(post.title, /This week/);
     assert.match(post.content, /## The big story/);
+  });
+
+  test("a template made for a design brings it, with photos at absolute addresses", async () => {
+    const { redirect } = await owner.action(
+      "/dashboard/posts/new",
+      "posts/actions",
+      "createPostFrom",
+      ["starter:new-collection"],
+    );
+    const id = redirect?.match(/\/dashboard\/posts\/([0-9a-f-]{36})/)?.[1];
+    const [post] = await sql`select content, email_design from posts where id = ${id ?? ""}`;
+    assert.equal(post.email_design, "boutique");
+    assert.ok(post.content.includes(`](${BASE}/templates/fashion/hero.jpg)`), post.content);
+    assert.ok(!post.content.includes("{{assets}}"));
   });
 
   test("an unknown starter gives a blank post", async () => {

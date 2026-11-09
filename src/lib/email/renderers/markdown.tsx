@@ -1,10 +1,10 @@
 import "server-only";
 import { createEmailMarkdownComponents } from "@/emails/components/markdown-email";
 import NewsletterEmail from "@/emails/newsletter";
-import { isEmailDesign } from "@/lib/email-designs";
+import { EMAIL_DESIGNS, isEmailDesign } from "@/lib/email-designs";
 import { renderEmail } from "@/lib/email/render";
 import { parseMarkdown } from "@/lib/markdown/parse";
-import { renderMarkdownTree } from "@/lib/markdown/render";
+import { renderMarkdownTree, splitHero } from "@/lib/markdown/render";
 import { markdownExcerpt } from "@/lib/markdown/excerpt";
 import type { EmailRenderer } from "./types";
 
@@ -12,8 +12,13 @@ export const markdownRenderer: EmailRenderer = {
   format: "markdown",
   async render({ post, publication, urls }) {
     const tree = parseMarkdown(post.content);
-    const design = isEmailDesign(publication.emailDesign) ? publication.emailDesign : "classic";
+    const chosen = post.emailDesign ?? publication.emailDesign;
+    const design = isEmailDesign(chosen) ? chosen : "classic";
     const accent = publication.accentColor ?? undefined;
+    // Designs with a cover photo show a post's opening image above the title.
+    const { hero, rest } = EMAIL_DESIGNS[design].hero
+      ? splitHero(tree)
+      : { hero: null, rest: tree };
     return renderEmail(
       <NewsletterEmail
         design={design}
@@ -26,11 +31,9 @@ export const markdownRenderer: EmailRenderer = {
         unsubscribeUrl={urls.unsubscribe}
         senderName={publication.fromName ?? undefined}
         brand={{ logoUrl: publication.logoUrl, fontStyle: publication.fontStyle, accent }}
+        hero={hero}
       >
-        {renderMarkdownTree(
-          tree,
-          createEmailMarkdownComponents({ accent, accentHeadings: design === "magazine" }),
-        )}
+        {renderMarkdownTree(rest, createEmailMarkdownComponents({ accent, design }))}
       </NewsletterEmail>,
     );
   },

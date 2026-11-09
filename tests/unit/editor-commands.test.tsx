@@ -158,6 +158,7 @@ const check = (name: string, ok: boolean, detail = "") => {
     "Bulleted list": /^- ?$/,
     "Numbered list": /^1\. ?$/,
     Quote: /^> ?$/,
+    Button: /^\[Button text\]\(https:\/\/example\.com\)$/,
     Divider: /^---/,
     "Code block": /^```\n?\n?```$/,
     Table: /^\|.*\|\n\| *-+ *\|/,

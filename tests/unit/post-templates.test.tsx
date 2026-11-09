@@ -11,7 +11,12 @@ import { contentExtensions } from "../../src/components/editor/extensions";
 import { emailMarkdownComponents } from "../../src/emails/components/markdown-email";
 import { parseMarkdown } from "../../src/lib/markdown/parse";
 import { renderMarkdownTree } from "../../src/lib/markdown/render";
-import { STARTER_TEMPLATES, starterTemplate } from "../../src/lib/post-templates";
+import {
+  ASSETS,
+  STARTER_TEMPLATES,
+  starterContent,
+  starterTemplate,
+} from "../../src/lib/post-templates";
 
 const manager = new MarkdownManager({ extensions: resolveExtensions(contentExtensions()) });
 const html = (md: string) =>
@@ -26,12 +31,14 @@ const equivalent = (a: string, b: string) => {
 
 for (const template of STARTER_TEMPLATES) {
   test(`starter template "${template.name}" survives the editor`, () => {
-    const once = manager.serialize(manager.parse(template.content));
-    const before = html(template.content);
+    const content = starterContent(template, "https://app.test");
+    assert.ok(!content.includes(ASSETS));
+    const once = manager.serialize(manager.parse(content));
+    const before = html(content);
     const after = html(once);
     assert.ok(
       before === after || equivalent(before, after),
-      `renders differently after the editor:\n${template.content}\n---\n${once}`,
+      `renders differently after the editor:\n${content}\n---\n${once}`,
     );
     assert.ok(template.title.length > 0 && template.title.length <= 200);
     assert.ok(template.name.length > 0 && template.description.length > 0);

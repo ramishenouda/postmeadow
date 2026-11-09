@@ -27,6 +27,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { EMAIL_DESIGNS, type EmailDesign } from "@/lib/email-designs";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +38,7 @@ import {
   sendTest,
   unschedulePost,
   saveAsTemplate,
+  setPostDesign,
   type PostInput,
 } from "../actions";
 
@@ -60,6 +62,8 @@ export function PostEditor({
   ownerEmail,
   mode = "draft",
   scheduledAt = null,
+  design: initialDesign = null,
+  defaultDesign = "classic",
 }: {
   post: Draft;
   urlPrefix: string;
@@ -69,6 +73,9 @@ export function PostEditor({
   mode?: "draft" | "sent";
   /** ISO time, when the post is scheduled. */
   scheduledAt?: string | null;
+  /** This post's own email design; null uses the publication's (`defaultDesign`). */
+  design?: string | null;
+  defaultDesign?: string;
 }) {
   const sentMode = mode === "sent";
   const [title, setTitle] = useState(post.title);
@@ -83,6 +90,7 @@ export function PostEditor({
   const [notice, setNotice] = useState<Notice>(null);
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [design, setDesign] = useState<string | null>(initialDesign);
   const [busy, startTransition] = useTransition();
 
   // Bumped on every edit; a save only marks "saved" if nothing changed meanwhile.
@@ -154,7 +162,7 @@ export function PostEditor({
         const res = await fetch(`/api/posts/${post.id}/preview`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, subtitle, slug, content }),
+          body: JSON.stringify({ title, subtitle, slug, content, design }),
           signal: controller.signal,
         });
         if (res.ok) setPreviewHtml(await res.text());
@@ -166,7 +174,7 @@ export function PostEditor({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [tab, post.id, title, subtitle, slug, content]);
+  }, [tab, post.id, title, subtitle, slug, content, design]);
 
   const run = (
     action: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>,
@@ -287,30 +295,57 @@ export function PostEditor({
             </button>
           ))}
         </div>
-        {tab === "preview" ? (
-          <div className="flex items-center gap-1" role="group" aria-label="Preview width">
-            {(
-              [
-                ["desktop", Monitor, "Desktop"],
-                ["mobile", Smartphone, "Mobile"],
-              ] as const
-            ).map(([d, Icon, label]) => (
-              <button
-                key={d}
-                onClick={() => setDevice(d)}
-                aria-pressed={device === d}
-                title={label}
-                className={cn(
-                  "text-muted-foreground hover:bg-muted inline-flex size-8 items-center justify-center rounded-md",
-                  device === d && "bg-muted text-foreground",
-                )}
+        <div className="flex flex-wrap items-center gap-3">
+          {sentMode ? null : (
+            <label className="text-muted-foreground flex items-center gap-2 text-sm">
+              Design
+              <select
+                value={design ?? ""}
+                disabled={busy}
+                onChange={(e) => {
+                  const next = e.target.value || null;
+                  setDesign(next);
+                  run(() => setPostDesign(post.id, next));
+                }}
+                className="bg-background text-foreground focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm outline-none focus-visible:ring-2"
               >
-                <Icon className="size-4" aria-hidden />
-                <span className="sr-only">{label}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+                <option value="">
+                  Publication default (
+                  {EMAIL_DESIGNS[defaultDesign as EmailDesign]?.name ?? "Classic"})
+                </option>
+                {(Object.keys(EMAIL_DESIGNS) as EmailDesign[]).map((id) => (
+                  <option key={id} value={id}>
+                    {EMAIL_DESIGNS[id].name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {tab === "preview" ? (
+            <div className="flex items-center gap-1" role="group" aria-label="Preview width">
+              {(
+                [
+                  ["desktop", Monitor, "Desktop"],
+                  ["mobile", Smartphone, "Mobile"],
+                ] as const
+              ).map(([d, Icon, label]) => (
+                <button
+                  key={d}
+                  onClick={() => setDevice(d)}
+                  aria-pressed={device === d}
+                  title={label}
+                  className={cn(
+                    "text-muted-foreground hover:bg-muted inline-flex size-8 items-center justify-center rounded-md",
+                    device === d && "bg-muted text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  <span className="sr-only">{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className={cn("mx-auto max-w-3xl space-y-4", tab !== "write" && "hidden")}>
