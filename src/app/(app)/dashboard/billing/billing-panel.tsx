@@ -54,11 +54,17 @@ export function BillingPanel({
   justCheckedOut,
   billing,
   usage,
+  sending,
 }: {
   enabled: boolean;
   justCheckedOut: boolean;
   billing: Billing;
   usage: { used: number; limit: number };
+  /** Plan sending limits (src/lib/limits.ts). */
+  sending: {
+    subscribers: { used: number; limit: number };
+    emails: { used: number; limit: number };
+  };
 }) {
   const router = useRouter();
   const [interval, setInterval] = useState<Interval>(billing.interval ?? "month");
@@ -134,11 +140,27 @@ export function BillingPanel({
                     ? `. Ends on ${periodEnd}; you'll move to Free after that.`
                     : `. Renews on ${periodEnd}.`
                   : ".")
-              : "Free forever. Upgrade any time for more storage."}
+              : "Free forever. Upgrade any time for more subscribers, emails and storage."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <StorageBar used={usage.used} limit={usage.limit} />
+          <UsageBar
+            label="Subscribers"
+            used={sending.subscribers.used}
+            limit={sending.subscribers.limit}
+          />
+          <UsageBar
+            label="Emails this month"
+            used={sending.emails.used}
+            limit={sending.emails.limit}
+          />
+          <UsageBar label="Image storage" used={usage.used} limit={usage.limit} unit="bytes" />
+          {sending.subscribers.used > sending.subscribers.limit ? (
+            <p className="text-destructive text-sm">
+              You have more subscribers than your plan includes. Sign-ups keep working, but sending
+              is paused until you upgrade.
+            </p>
+          ) : null}
           {overQuota ? (
             <p className="text-destructive text-sm">
               You&apos;re using more than your plan includes. Existing images keep working, but new
@@ -176,7 +198,11 @@ export function BillingPanel({
                       / {id === "free" ? "forever" : interval}
                     </span>
                   </p>
-                  <p className="text-sm">{formatBytes(PLANS[id].storageBytes)} image storage</p>
+                  <ul className="space-y-0.5 text-sm">
+                    <li>{PLANS[id].subscribers.toLocaleString("en")} subscribers</li>
+                    <li>{PLANS[id].emailsPerMonth.toLocaleString("en")} emails a month</li>
+                    <li>{formatBytes(PLANS[id].storageBytes)} image storage</li>
+                  </ul>
                   <PlanButton
                     id={id}
                     current={plan}
@@ -335,20 +361,31 @@ function Addons({
   );
 }
 
-function StorageBar({ used, limit }: { used: number; limit: number }) {
+function UsageBar({
+  label,
+  used,
+  limit,
+  unit = "count",
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  unit?: "bytes" | "count";
+}) {
   const percent = Math.min(100, Math.round((used / limit) * 100));
+  const show = (n: number) => (unit === "bytes" ? formatBytes(n) : n.toLocaleString("en"));
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
-        <span>Storage</span>
+        <span>{label}</span>
         <span className="text-muted-foreground">
-          {formatBytes(used)} of {formatBytes(limit)}
+          {show(used)} of {show(limit)}
         </span>
       </div>
       <div
         className="bg-muted h-2 overflow-hidden rounded-full"
         role="progressbar"
-        aria-label="Storage used"
+        aria-label={`${label} used`}
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -356,7 +393,7 @@ function StorageBar({ used, limit }: { used: number; limit: number }) {
         <div
           className={cn(
             "h-full",
-            percent >= 90 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-foreground",
+            percent >= 90 ? "bg-destructive" : percent >= 75 ? "bg-amber-500" : "bg-primary",
           )}
           style={{ width: `${Math.max(percent, used > 0 ? 1 : 0)}%` }}
         />

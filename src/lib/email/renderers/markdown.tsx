@@ -30,6 +30,7 @@ export const markdownRenderer: EmailRenderer = {
         webUrl={urls.webVersion}
         unsubscribeUrl={urls.unsubscribe}
         senderName={publication.fromName ?? undefined}
+        postalAddress={publication.postalAddress}
         brand={{ logoUrl: publication.logoUrl, fontStyle: publication.fontStyle, accent }}
         hero={hero}
       >

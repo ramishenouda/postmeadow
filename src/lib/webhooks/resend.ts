@@ -1,4 +1,5 @@
 import "server-only";
+import { checkReputation } from "@/lib/reputation";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, deliveryLinkClicks, subscribers } from "@/db/schema";
@@ -165,6 +166,15 @@ export async function handleResendEvent(
       )
       .where(target);
   });
+
+  // Too many spam reports or bounces pauses the publication (src/lib/reputation.ts).
+  if (delivery) {
+    const [owner] = await db
+      .select({ publicationId: subscribers.publicationId })
+      .from(subscribers)
+      .where(eq(subscribers.id, delivery.subscriberId));
+    if (owner) await checkReputation(owner.publicationId);
+  }
 
   return outcome.kind;
 }

@@ -33,6 +33,8 @@ export type NewsletterEmailProps = {
   design?: EmailDesign;
   /** For the Letter design's signature. */
   senderName?: string;
+  /** The writer's postal address, in every footer (anti-spam laws require one). */
+  postalAddress?: string | null;
   /** Dateline for Letter and Magazine. */
   date?: Date;
   /**
@@ -45,6 +47,12 @@ export type NewsletterEmailProps = {
 
 const fonts = emailFonts;
 
+/** Class names used by components/markdown-email.tsx for image rows. */
+export const MOBILE_CSS = `@media only screen and (max-width: 480px) {
+  .pm-col { display: block !important; width: 100% !important; padding: 0 0 14px 0 !important; }
+  .pm-col img { width: 100% !important; height: auto !important; }
+}`;
+
 const ink = { text: "#1c1917", soft: "#57534e", muted: "#78716c", rule: "#e7e5e0" };
 
 const dateline = (date: Date) =>
@@ -56,7 +64,7 @@ type Shared = Required<
     "publicationName" | "publicationUrl" | "title" | "webUrl" | "unsubscribeUrl"
   >
 > &
-  Pick<NewsletterEmailProps, "subtitle" | "senderName" | "children"> & {
+  Pick<NewsletterEmailProps, "subtitle" | "senderName" | "postalAddress" | "children"> & {
     logoUrl: string | null;
     accent: string;
     date: Date;
@@ -94,7 +102,11 @@ export default function NewsletterEmail({
 
   return (
     <Html lang="en">
-      <Head />
+      <Head>
+        {/* Phones: image rows stack, one image per line (clients without media queries
+            keep them side by side, which still works). */}
+        <style>{MOBILE_CSS}</style>
+      </Head>
       <Preview>{preview}</Preview>
       <Body style={{ backgroundColor: background, fontFamily: font, margin: 0, padding: "24px 0" }}>
         <Layout {...shared} />
@@ -136,47 +148,49 @@ function Masthead({
   );
 }
 
-function Footer({
-  publicationName,
-  unsubscribeUrl,
-  webUrl,
-  align = "left",
-  withWebLink = false,
-  linkColor = ink.muted,
-  color = ink.muted,
-}: {
+type FooterProps = {
   publicationName: string;
   unsubscribeUrl: string;
   webUrl: string;
+  postalAddress?: string | null;
   align?: CSSProperties["textAlign"];
   withWebLink?: boolean;
   linkColor?: string;
   color?: string;
-}) {
+};
+
+function Footer({
+  publicationName,
+  unsubscribeUrl,
+  webUrl,
+  postalAddress,
+  align = "left",
+  withWebLink = false,
+  linkColor = ink.muted,
+  color = ink.muted,
+}: FooterProps) {
   const link: CSSProperties = { color: linkColor, textDecoration: "underline" };
+  const text: CSSProperties = { color, fontSize: "12px", lineHeight: "18px", textAlign: align };
   return (
-    <Text
-      style={{
-        color,
-        fontSize: "12px",
-        lineHeight: "18px",
-        margin: 0,
-        textAlign: align,
-      }}
-    >
-      You&apos;re receiving this because you subscribed to {publicationName}.{" "}
-      {withWebLink ? (
-        <>
-          <Link href={webUrl} style={link}>
-            View in browser
-          </Link>
-          {" · "}
-        </>
+    <>
+      <Text style={{ ...text, margin: 0 }}>
+        You&apos;re receiving this because you subscribed to {publicationName}.{" "}
+        {withWebLink ? (
+          <>
+            <Link href={webUrl} style={link}>
+              View in browser
+            </Link>
+            {" · "}
+          </>
+        ) : null}
+        <Link href={unsubscribeUrl} style={link}>
+          Unsubscribe
+        </Link>
+      </Text>
+      {postalAddress ? (
+        <Text style={{ ...text, margin: "8px 0 0", whiteSpace: "pre-line" }}>{postalAddress}</Text>
       ) : null}
-      <Link href={unsubscribeUrl} style={link}>
-        Unsubscribe
-      </Link>
-    </Text>
+    </>
   );
 }
 

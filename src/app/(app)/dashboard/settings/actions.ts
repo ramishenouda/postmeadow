@@ -2,6 +2,13 @@
 
 import { eq } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { AccountError, deleteAccount } from "@/lib/account";
+import { auth } from "@/lib/auth";
+import { APP_NAME } from "@/lib/brand";
+import { sendNotice } from "@/lib/notify";
 import { db } from "@/db";
 import { publications } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
@@ -29,6 +36,10 @@ export async function updateSettings(
     description: String(formData.get("description") ?? ""),
     fromName: String(formData.get("fromName") ?? ""),
     replyTo: String(formData.get("replyTo") ?? ""),
+    // Not in the form (an older page, a script): keep the saved address.
+    postalAddress: formData.has("postalAddress")
+      ? String(formData.get("postalAddress"))
+      : (publication.postalAddress ?? ""),
     logoUrl: String(formData.get("logoUrl") ?? ""),
     accentColor: String(formData.get("accentColor") ?? ""),
     fontStyle: String(formData.get("fontStyle") ?? "sans"),
@@ -81,4 +92,37 @@ export async function deleteUploadedImage(imageId: string): Promise<DeleteImageR
   }
   refresh();
   return { ok: true };
+}
+
+/**
+ * Deletes the account and everything in it. The writer confirms by typing their
+ * publication's web address, so it can't happen by a stray click.
+ */
+export async function deleteMyAccount(confirmation: string): Promise<{ ok: false; error: string }> {
+  const { user, publication } = await requirePublication();
+  if (confirmation.trim().toLowerCase() !== publication.slug) {
+    return { ok: false, error: `Type ${publication.slug} to confirm.` };
+  }
+
+  const requestHeaders = await headers();
+  try {
+    const { slugs } = await deleteAccount(user.id);
+    for (const slug of slugs) updateTag(publicationTag(slug));
+  } catch (error) {
+    if (error instanceof AccountError) return { ok: false, error: error.message };
+    throw error;
+  }
+  // Clear the browser's sign-in cookie (the session itself went with the account).
+  await auth.api.signOut({ headers: requestHeaders }).catch(() => {});
+
+  after(() =>
+    sendNotice(user.email, `Your ${APP_NAME} account has been deleted`, {
+      title: "Your account has been deleted",
+      paragraphs: [
+        `Your ${APP_NAME} account, your publication, posts, subscribers and uploaded images have been deleted. Any paid plan has been cancelled.`,
+        "Thanks for writing with us. If this wasn't you, reply to this email right away.",
+      ],
+    }),
+  );
+  redirect("/account-deleted");
 }

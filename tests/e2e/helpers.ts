@@ -268,6 +268,9 @@ export async function createOwner(email: string, slug: string, name = "Test Publ
     `publication not created: ${JSON.stringify(result)}`,
   );
   const publicationId = await scalar(sql`select id from publications where slug = ${slug}`);
+  // Sending needs a postal address (it goes in every footer); tests that check the
+  // "missing address" case clear it again.
+  await sql`update publications set postal_address = '1 Test Street, 10115 Berlin' where id = ${publicationId}`;
   return { owner, publicationId };
 }
 

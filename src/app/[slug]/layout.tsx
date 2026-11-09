@@ -15,6 +15,11 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           Published with{" "}
           <span className="font-display text-foreground font-semibold">{APP_NAME}</span>
         </Link>
+        <p className="mt-3">
+          <Link href="/privacy" className="hover:text-foreground underline underline-offset-2">
+            Privacy
+          </Link>
+        </p>
       </footer>
     </div>
   );

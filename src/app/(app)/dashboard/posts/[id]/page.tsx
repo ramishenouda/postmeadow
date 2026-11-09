@@ -12,6 +12,7 @@ import { deliveries, subscribers } from "@/db/schema";
 import { env } from "@/env";
 import { formatDateTime } from "@/lib/format";
 import { getOwnedPost } from "@/lib/posts";
+import { countAudience, listTags, postAudience } from "@/lib/tags";
 import { deliveryStats, engagementStats } from "@/lib/sending";
 import { AutoRefresh } from "./auto-refresh";
 import { PostEditor } from "./post-editor";
@@ -37,10 +38,19 @@ async function PostLoader({ params }: Pick<Props, "params">) {
   const { user, publication, post } = owned;
 
   if (post.status === "draft" || post.status === "scheduled") {
-    const [{ active }] = await db
-      .select({ active: count() })
-      .from(subscribers)
-      .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.status, "active")));
+    const [[{ active }], tagList, audience] = await Promise.all([
+      db
+        .select({ active: count() })
+        .from(subscribers)
+        .where(
+          and(eq(subscribers.publicationId, publication.id), eq(subscribers.status, "active")),
+        ),
+      listTags(publication.id),
+      postAudience(post.id),
+    ]);
+    const tagIds = audience.tags.map((t) => t.id);
+    const recipients =
+      audience.mode === "tags" ? await countAudience(publication.id, tagIds) : active;
     return (
       <PostEditor
         post={{
@@ -54,13 +64,21 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         activeSubscribers={active}
         ownerEmail={user.email}
         scheduledAt={post.status === "scheduled" ? (post.scheduledAt?.toISOString() ?? null) : null}
+        sendError={post.status === "draft" ? post.sendError : null}
+        tags={tagList}
+        audience={{ mode: audience.mode, tagIds }}
+        recipients={recipients}
         design={post.emailDesign}
         defaultDesign={publication.emailDesign}
       />
     );
   }
 
-  const [stats, engagement] = await Promise.all([deliveryStats(post.id), engagementStats(post.id)]);
+  const [stats, engagement, sentTo] = await Promise.all([
+    deliveryStats(post.id),
+    engagementStats(post.id),
+    postAudience(post.id),
+  ]);
   const failures =
     stats.failed + stats.bounced + stats.complained > 0
       ? await db
@@ -94,6 +112,9 @@ async function PostLoader({ params }: Pick<Props, "params">) {
         <p className="text-muted-foreground text-sm">
           {post.status === "sending" ? "Sending started" : "Sent"}{" "}
           {formatDateTime(post.publishedAt)}
+          {sentTo.mode === "tags"
+            ? ` to subscribers tagged ${sentTo.tags.map((t) => t.name).join(", ") || "(deleted tags)"}`
+            : null}
           {post.webHidden ? " · Removed from your web archive" : null}
         </p>
         {post.status === "sent" ? (

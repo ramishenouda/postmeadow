@@ -24,6 +24,7 @@
     "@floating-ui/dom": "1.8.0",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.2.0",
+    "@sentry/nextjs": "11.9.0",
     "@tiptap/extension-bubble-menu": "3.32.0",
     "@tiptap/extension-file-handler": "3.32.0",
     "@tiptap/extension-image": "3.32.0",

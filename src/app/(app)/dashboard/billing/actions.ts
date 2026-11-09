@@ -9,6 +9,7 @@ import {
   startCheckout,
 } from "@/lib/billing/service";
 import { PAID_PLANS, type Interval, type PaidPlanId } from "@/lib/plans";
+import { reportError } from "@/lib/report";
 
 export type BillingResult = { ok: true; url?: string } | { ok: false; error: string };
 
@@ -21,7 +22,7 @@ async function run(fn: () => Promise<string | void>): Promise<BillingResult> {
     return url ? { ok: true, url } : { ok: true };
   } catch (error) {
     if (error instanceof BillingError) return { ok: false, error: error.message };
-    console.error("billing action failed", error);
+    reportError("billing action failed", error);
     return { ok: false, error: "Something went wrong talking to Stripe. Try again." };
   }
 }

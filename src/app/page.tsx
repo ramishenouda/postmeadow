@@ -213,7 +213,7 @@ export default function Home() {
             <p className="text-primary text-sm font-medium">Pricing</p>
             <h2 className="font-display text-4xl font-semibold tracking-tight">Simple pricing</h2>
             <p className="text-muted-foreground text-lg">
-              Every feature on every plan. Pay only when you need more storage.
+              Every feature on every plan. Upgrade when your list grows.
             </p>
           </div>
           <div className="mt-12">

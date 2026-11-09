@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
@@ -45,6 +46,12 @@ export const publications = pgTable(
     welcomeMessage: text("welcome_message"),
     // Email layout for every issue: classic | minimal | letter | magazine (src/lib/email-designs.ts)
     emailDesign: text("email_design").notNull().default("classic"),
+    // Shown in every email's footer. Anti-spam laws (e.g. CAN-SPAM) require a postal
+    // address in newsletters; sending is refused until it's set.
+    postalAddress: text("postal_address"),
+    // Paused by an admin or by the automatic spam-report check: nothing can be sent.
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    suspendedReason: text("suspended_reason"),
     ...timestamps,
   },
   (t) => [index("publications_owner_idx").on(t.ownerId)],
@@ -82,6 +89,8 @@ export const subscribers = pgTable(
     invitedAt: timestamp("invited_at", { withTimezone: true }),
     // Invitations sent to this address, capped so writers can't pester people.
     inviteCount: integer("invite_count").notNull().default(0),
+    // How they got on the list: "signup" (public form), "invite" or "import".
+    source: text("source").notNull().default("signup"),
     ...timestamps,
   },
   (t) => [
@@ -121,6 +130,11 @@ export const posts = pgTable(
     webHidden: boolean("web_hidden").notNull().default(false),
     // This post's email design (src/lib/email-designs.ts). Null: the publication's.
     emailDesign: text("email_design"),
+    // Who gets it: "everyone" (active subscribers) or "tags" (active subscribers with
+    // any of the tags in post_audience_tags; none left means nobody, never everyone).
+    audience: text("audience").notNull().default("everyone"),
+    // Why the last send attempt was refused (e.g. a scheduled post over the plan limit).
+    sendError: text("send_error"),
     ...timestamps,
   },
   (t) => [
@@ -260,4 +274,69 @@ export const postTemplates = pgTable(
     ...timestamps,
   },
   (t) => [index("post_templates_publication_idx").on(t.publicationId)],
+);
+
+// ─── Tags and segments ───────────────────────────────────────────────────────
+
+/** Labels for subscribers, per publication. Posts can be sent to subscribers with tags. */
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    publicationId: uuid("publication_id")
+      .notNull()
+      .references(() => publications.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("tags_publication_name_idx").on(t.publicationId, sql`lower(${t.name})`)],
+);
+
+export const subscriberTags = pgTable(
+  "subscriber_tags",
+  {
+    subscriberId: uuid("subscriber_id")
+      .notNull()
+      .references(() => subscribers.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.subscriberId, t.tagId] }),
+    index("subscriber_tags_tag_idx").on(t.tagId),
+  ],
+);
+
+/** The tags a post is sent to (when posts.audience = "tags"). */
+export const postAudienceTags = pgTable(
+  "post_audience_tags",
+  {
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.tagId] })],
+);
+
+// ─── Usage ───────────────────────────────────────────────────────────────────
+
+/**
+ * Newsletter emails queued per account per calendar month (UTC), for the plan's
+ * monthly limit. A counter rather than a count of deliveries, so deleting
+ * subscribers doesn't give sends back.
+ */
+export const emailUsage = pgTable(
+  "email_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    month: text("month").notNull(), // "2026-11"
+    emails: integer("emails").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.month] })],
 );

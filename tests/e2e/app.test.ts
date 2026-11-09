@@ -87,6 +87,32 @@ describe("onboarding", () => {
   });
 });
 
+describe("postal address", () => {
+  test("the dashboard asks for it; settings save it", async () => {
+    assert.match(await owner.page("/dashboard"), /Add your postal address/);
+    const { result } = await owner.formAction(
+      "/dashboard/settings",
+      "settings/actions",
+      "updateSettings",
+      {
+        name: "The Weekly Byte",
+        description: "Small, useful things.",
+        fromName: "Byte Team",
+        replyTo: "replies@example.com",
+        postalAddress: "Byte Team, 1 Example Street, 10115 Berlin",
+        logoUrl: "",
+        accentColor: "",
+        fontStyle: "sans",
+        welcomeEnabled: "on",
+        welcomeMessage: "",
+        emailDesign: "classic",
+      },
+    );
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.doesNotMatch(await owner.page("/dashboard"), /Add your postal address/);
+  });
+});
+
 describe("public page and double opt-in", () => {
   const reader = new Client();
 

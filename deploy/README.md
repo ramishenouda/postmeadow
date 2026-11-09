@@ -1,7 +1,7 @@
 # Deploying Postmeadow
 
 Postmeadow runs as four containers on one Linux server: the app, Postgres, Caddy
-(HTTPS) and a nightly backup job. The same setup works on any VPS with Docker, so it
+(HTTPS) and a nightly backup job (with encrypted off-site copies). The same setup works on any VPS with Docker, so it
 runs on the Hostinger KVM 2 today and can move to Hetzner later (see the last section).
 
 ```
@@ -166,19 +166,63 @@ finish; anything interrupted can be resumed from the post page.
 
 ### Backups
 
-- **Database:** dumped every night to `/opt/postmeadow/backups` (kept 14 days).
-- **Uploads and everything else:** Hostinger's VPS backup (currently weekly; consider daily
-  in hPanel).
-- **Off-server copy:** backups on the same server don't help if the server is lost. Copy them
-  somewhere else regularly, e.g. from your computer:
-  `rsync -av deploy@145.223.82.249:/opt/postmeadow/backups/ ./postmeadow-backups/`
-  Later, automate this to object storage (e.g. Hetzner Object Storage) with `rclone`.
+Every night the `backup` container:
 
-**Restore drill** (do it once, so you know it works):
+- dumps the database to `/opt/postmeadow/backups` (kept 14 days on the server), and
+- if `BACKUP_S3_*` is set in `.env`, copies the dump **and the uploaded images** to
+  S3-compatible storage, **encrypted** with `BACKUP_PASSPHRASE` (the provider sees only
+  scrambled names and contents). Dumps are kept 30 days off-site; images are synced, and
+  ones deleted on the server are kept 30 days under `deleted/`.
+
+**Setting up off-site backups** (once):
+
+1. Create a bucket and an access key at any S3-compatible provider. Backblaze B2 and
+   Cloudflare R2 cost cents a month at this size; Hetzner Object Storage fits the later move.
+2. Fill in the `BACKUP_S3_*` lines in `.env` (see `.env.example` for endpoint examples), and
+   `BACKUP_PASSPHRASE` from `openssl rand -base64 32`. **Save the passphrase in your password
+   manager too**: without it the off-site backups can't be decrypted.
+3. `docker compose up -d --build backup`, then check `docker compose logs backup` shows
+   `round finished (ok)`. To run a round right away:
+   `docker compose run --rm -e BACKUP_ONCE=1 backup`.
+
+**Restore drill** (do it once, so you know it works). From the server's own dumps:
 
 ```bash
 docker compose exec -T postgres pg_restore -U postmeadow -d postmeadow --clean --if-exists < backups/postmeadow-YYYY-MM-DD.dump
 ```
+
+From the off-site copy (e.g. after losing the server), on any machine with Docker, using the
+same values as in `.env`:
+
+```bash
+docker run --rm -v "$PWD/restore:/restore" --entrypoint sh \
+  -e RCLONE_CONFIG_OFFSITE_TYPE=s3 -e RCLONE_CONFIG_OFFSITE_PROVIDER=Other \
+  -e RCLONE_CONFIG_OFFSITE_ENDPOINT="$BACKUP_S3_ENDPOINT" \
+  -e RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID" \
+  -e RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY" \
+  -e RCLONE_CONFIG_SECRET_TYPE=crypt -e RCLONE_CONFIG_SECRET_REMOTE="offsite:$BACKUP_S3_BUCKET/postmeadow" \
+  -e PASS="$BACKUP_PASSPHRASE" rclone/rclone:1.75 \
+  -c 'export RCLONE_CONFIG_SECRET_PASSWORD=$(rclone obscure "$PASS"); rclone copy secret: /restore'
+```
+
+You get `restore/db/postmeadow-*.dump` (restore with `pg_restore` as above) and
+`restore/storage/images/…` (copy into the `postmeadow_storage` volume).
+
+### Error monitoring (Sentry)
+
+Create a free project at sentry.io (platform: Next.js), copy its DSN into `SENTRY_DSN` in
+`.env` and run `docker compose up -d`. Server errors, failed sends and failed webhooks are
+reported; no personal data is sent (no IPs, cookies, headers or bodies, and tokens in links
+are blanked). For browser errors too, also set the repository variable
+`NEXT_PUBLIC_SENTRY_DSN` (Settings → Variables) to the same DSN; it's built into the app.
+
+### Admin
+
+Put your email in `ADMIN_EMAILS` (comma-separated for more people) and open
+`https://postmeadow.com/admin`: every publication with its plan, list growth, imports,
+emails this month and bounce/spam rates, flagged ones first, with a Pause switch. Accounts
+are also paused automatically when spam reports or bounces get too high, and admins get an
+email when that happens.
 
 ---
 

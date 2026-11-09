@@ -11,27 +11,41 @@ export const PLANS = {
   free: {
     name: "Free",
     storageBytes: 500 * MB,
+    subscribers: 1_000,
+    emailsPerMonth: 10_000,
     invitesPerDay: 100,
     tagline: "Everything you need to start.",
   },
   pro: {
     name: "Pro",
     storageBytes: 10 * GB,
+    subscribers: 10_000,
+    emailsPerMonth: 100_000,
     invitesPerDay: 1_000,
     tagline: "For writers with a growing list.",
   },
   business: {
     name: "Business",
     storageBytes: 50 * GB,
+    subscribers: 50_000,
+    emailsPerMonth: 500_000,
     invitesPerDay: 5_000,
     tagline: "For teams and image-heavy newsletters.",
   },
 } as const;
 
+const planOf = (plan: string) => (isPlanId(plan) ? PLANS[plan] : PLANS.free);
+
 /** Invitation emails a publication may send per 24 hours (they go to people who haven't opted in). */
-export function invitesPerDay(plan: string): number {
-  return (isPlanId(plan) ? PLANS[plan] : PLANS.free).invitesPerDay;
-}
+export const invitesPerDay = (plan: string) => planOf(plan).invitesPerDay;
+
+/**
+ * Sending limits. Active subscribers: sign-ups keep working past the limit, but
+ * sending pauses until the list is back under it or the plan is upgraded. Emails per
+ * calendar month (UTC): a safety net against very frequent sending.
+ */
+export const subscriberLimit = (plan: string) => planOf(plan).subscribers;
+export const monthlyEmailLimit = (plan: string) => planOf(plan).emailsPerMonth;
 
 export type PlanId = keyof typeof PLANS;
 export type PaidPlanId = Exclude<PlanId, "free">;

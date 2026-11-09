@@ -7,6 +7,7 @@ import { publications } from "@/db/schema";
 import { getPublicationForUser, requireUser } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { firstErrors, newPublicationSchema } from "@/lib/publication-schema";
+import { reportError } from "@/lib/report";
 
 type Fields = keyof z.input<typeof newPublicationSchema>;
 
@@ -41,7 +42,7 @@ export async function createPublication(
     if (isUniqueViolation(error)) {
       return { errors: { slug: "That address is already taken. Pick another." }, values: raw };
     }
-    console.error("createPublication failed", error);
+    reportError("createPublication failed", error);
     return { errors: { form: "Something went wrong. Try again." }, values: raw };
   }
 

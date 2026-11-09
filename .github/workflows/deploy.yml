@@ -47,6 +47,7 @@ jobs:
             ${{ env.IMAGE }}:latest
           build-args: |
             APP_URL=${{ secrets.DEPLOY_SITE_URL }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -61,8 +62,9 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh_opts="-i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=yes"
 
-          # Keep the server's compose file and Caddyfile in sync with the repo.
+          # Keep the server's compose file, Caddyfile and backup job in sync with the repo.
           scp $ssh_opts deploy/docker-compose.yml deploy/Caddyfile "$TARGET:/opt/postmeadow/"
+          scp $ssh_opts -r deploy/backup "$TARGET:/opt/postmeadow/"
 
           # Pin this exact build, migrate, then (re)start. The previous image stays
           # available for a rollback (see deploy/README.md).
@@ -72,7 +74,7 @@ jobs:
           sed -i 's|^APP_IMAGE=.*|APP_IMAGE=${IMAGE}:${GITHUB_SHA}|' .env
           docker compose pull app
           docker compose run --rm migrate
-          docker compose up -d --remove-orphans
+          docker compose up -d --build --remove-orphans
           docker image prune -f >/dev/null
           EOF
 

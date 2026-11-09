@@ -1,15 +1,18 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import Papa from "papaparse";
 import { db } from "@/db";
-import { subscribers } from "@/db/schema";
+import { subscribers, subscriberTags, tags } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
 import { canRemove, emailSchema } from "@/lib/subscribers";
 import { createInvitations, inviteOne, sendInvitations } from "@/lib/invitations";
+import { subscriberFilterWhere, type SubscriberFilter } from "@/lib/subscriber-filters";
+import { addTags, findOrCreateTags, parseTagNames, TagError } from "@/lib/tags";
 import { randomToken } from "@/lib/tokens";
+import { reportError } from "@/lib/report";
 
 export type AddSubscriberState = { ok?: boolean; error?: string; email?: string };
 
@@ -30,7 +33,7 @@ export async function addSubscriber(
     const result = await inviteOne(publication, parsed.data);
     if (!result.ok) return { error: result.error, email: raw };
   } catch (error) {
-    console.error("invitation failed", error);
+    reportError("invitation failed", error);
     return { error: "We couldn't send the invitation. Try again in a moment.", email: raw };
   }
   refresh();
@@ -50,7 +53,7 @@ export async function inviteAgain(subscriberId: string): Promise<{ ok: boolean; 
     const result = await inviteOne(publication, row.email);
     if (!result.ok) return result;
   } catch (error) {
-    console.error("invitation failed", error);
+    reportError("invitation failed", error);
     return { ok: false, error: "We couldn't send the invitation. Try again in a moment." };
   }
   refresh();
@@ -128,14 +131,42 @@ export async function importSubscribers(
   }
 
   const emails = [...valid];
+  const tagNames = parseTagNames(String(formData.get("tags") ?? ""));
+  let importTags: { id: string }[] = [];
+  try {
+    importTags = await findOrCreateTags(publication.id, tagNames);
+  } catch (error) {
+    if (error instanceof TagError) return { error: error.message };
+    throw error;
+  }
+  /** Tag everyone in the file who is on the list now (new and existing). */
+  const tagImported = async () => {
+    if (importTags.length === 0) return;
+    for (let i = 0; i < emails.length; i += INSERT_CHUNK) {
+      const ids = await db
+        .select({ id: subscribers.id })
+        .from(subscribers)
+        .where(
+          and(
+            eq(subscribers.publicationId, publication.id),
+            inArray(subscribers.email, emails.slice(i, i + INSERT_CHUNK)),
+          ),
+        );
+      await addTags(
+        ids.map((r) => r.id),
+        importTags.map((t) => t.id),
+      );
+    }
+  };
 
   if (mode === "invited") {
     const created = await createInvitations(publication, emails);
     if (!created.ok) return { error: created.error };
+    await tagImported();
     // Respond now; the emails go out in batches afterwards.
     after(() =>
       sendInvitations(publication, created.invited).catch((e) =>
-        console.error("invitations failed", e),
+        reportError("invitations failed", e),
       ),
     );
     refresh();
@@ -158,6 +189,7 @@ export async function importSubscribers(
       email,
       status: "active" as const,
       confirmedAt: now,
+      source: "import",
       unsubscribeToken: randomToken(),
     }));
     // Existing rows (including unsubscribed people) are left untouched.
@@ -169,6 +201,7 @@ export async function importSubscribers(
     added += inserted.length;
   }
 
+  await tagImported();
   refresh();
   return { result: { mode, added, existing: emails.length - added, invalid, invalidSamples } };
 }
@@ -196,4 +229,62 @@ function extractEmails(text: string): string[] {
     .flatMap((cell) => cell.split(/[\s,;]+/))
     .map((cell) => cell.trim())
     .filter((cell) => cell.includes("@"));
+}
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+
+export type TagResult = { ok: true } | { ok: false; error: string };
+
+/** Replace one subscriber's tags with these names (new names become new tags). */
+export async function setSubscriberTags(subscriberId: string, names: string): Promise<TagResult> {
+  const { publication } = await requirePublication();
+  const [row] = await db
+    .select({ id: subscribers.id })
+    .from(subscribers)
+    .where(and(eq(subscribers.id, subscriberId), eq(subscribers.publicationId, publication.id)));
+  if (!row) return { ok: false, error: "Subscriber not found." };
+  try {
+    const wanted = await findOrCreateTags(publication.id, parseTagNames(names));
+    await db.delete(subscriberTags).where(eq(subscriberTags.subscriberId, row.id));
+    await addTags(
+      [row.id],
+      wanted.map((t) => t.id),
+    );
+  } catch (error) {
+    if (error instanceof TagError) return { ok: false, error: error.message };
+    throw error;
+  }
+  refresh();
+  return { ok: true };
+}
+
+/** Add a tag to everyone the list currently shows (its search and filters). */
+export async function tagMatching(filter: SubscriberFilter, name: string): Promise<TagResult> {
+  const { publication } = await requirePublication();
+  const [tagName] = parseTagNames(name);
+  if (!tagName) return { ok: false, error: "Enter a tag." };
+  try {
+    const [tag] = await findOrCreateTags(publication.id, [tagName]);
+    const matching = await db
+      .select({ id: subscribers.id })
+      .from(subscribers)
+      .where(subscriberFilterWhere(publication.id, filter));
+    await addTags(
+      matching.map((m) => m.id),
+      [tag.id],
+    );
+  } catch (error) {
+    if (error instanceof TagError) return { ok: false, error: error.message };
+    throw error;
+  }
+  refresh();
+  return { ok: true };
+}
+
+/** Delete a tag. Subscribers keep everything else; posts going to it lose it. */
+export async function deleteTag(tagId: string): Promise<TagResult> {
+  const { publication } = await requirePublication();
+  await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.publicationId, publication.id)));
+  refresh();
+  return { ok: true };
 }

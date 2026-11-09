@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { and, count, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { count, desc } from "drizzle-orm";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,17 +17,20 @@ import { db } from "@/db";
 import { subscribers } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
 import { formatDate } from "@/lib/format";
+import { parseSubscriberFilter, subscriberFilterWhere } from "@/lib/subscriber-filters";
+import { listTags, tagsBySubscriber } from "@/lib/tags";
+import { cn } from "@/lib/utils";
 import { MAX_INVITES } from "@/lib/invitations";
 import {
   canRemove,
   expiresAt,
   SUBSCRIBER_STATES,
   subscriberState,
-  subscriberStateWhere,
   type SubscriberState,
 } from "@/lib/subscribers";
 import { AddSubscriberForm } from "./add-subscriber-form";
 import { InviteAgainButton } from "./invite-again-button";
+import { DeleteTagButton, EditTags, TagMatching } from "./tag-controls";
 import { RemoveSubscriberButton } from "./remove-subscriber-button";
 
 export const metadata: Metadata = { title: "Subscribers" };
@@ -80,23 +83,10 @@ export default function SubscribersPage({ searchParams }: Props) {
 async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
   const { publication } = await requirePublication();
   const params = await searchParams;
-  const q = typeof params.q === "string" ? params.q.trim() : "";
-  // A state, or "waiting": invited or unconfirmed, i.e. can still answer.
-  const status =
-    params.status === "waiting" ||
-    (SUBSCRIBER_STATES as readonly string[]).includes(String(params.status))
-      ? (params.status as SubscriberState | "waiting")
-      : undefined;
+  const filter = parseSubscriberFilter(params);
+  const { q, status, tag } = filter;
   const page = Math.max(1, Number.parseInt(String(params.page ?? "1"), 10) || 1);
-
-  const filters: SQL[] = [eq(subscribers.publicationId, publication.id)];
-  if (q) filters.push(ilike(subscribers.email, `%${q.replace(/[\\%_]/g, "\\$&")}%`));
-  if (status === "waiting") {
-    filters.push(or(subscriberStateWhere("invited"), subscriberStateWhere("unconfirmed"))!);
-  } else if (status) {
-    filters.push(subscriberStateWhere(status));
-  }
-  const where = and(...filters);
+  const where = subscriberFilterWhere(publication.id, filter);
 
   const [rows, [{ total }]] = await Promise.all([
     db
@@ -108,12 +98,18 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
       .offset((page - 1) * PAGE_SIZE),
     db.select({ total: count() }).from(subscribers).where(where),
   ]);
+  const [allTags, rowTags] = await Promise.all([
+    listTags(publication.id),
+    tagsBySubscriber(rows.map((r) => r.id)),
+  ]);
+  const filtered = Boolean(q || status || tag);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (p: number) => {
     const next = new URLSearchParams();
     if (q) next.set("q", q);
     if (status) next.set("status", status);
+    if (tag) next.set("tag", tag);
     if (p > 1) next.set("page", String(p));
     const qs = next.toString();
     return `/dashboard/subscribers${qs ? `?${qs}` : ""}`;
@@ -144,10 +140,25 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
             </option>
           ))}
         </select>
+        {allTags.length ? (
+          <select
+            name="tag"
+            defaultValue={tag ?? ""}
+            aria-label="Tag"
+            className="bg-background h-9 rounded-lg border px-2.5 text-sm"
+          >
+            <option value="">All tags</option>
+            {allTags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <Button type="submit" variant="outline" className="h-9">
           Filter
         </Button>
-        {q || status ? (
+        {filtered ? (
           <Link
             href="/dashboard/subscribers"
             className={buttonVariants({ variant: "ghost", className: "h-9" })}
@@ -157,13 +168,36 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
         ) : null}
       </form>
 
+      {allTags.length ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="text-muted-foreground mr-1">Tags:</span>
+          {allTags.map((t) => (
+            <span
+              key={t.id}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border py-0.5 pr-2 pl-2.5 text-xs",
+                tag === t.id && "border-primary bg-primary/5",
+              )}
+            >
+              <Link href={`/dashboard/subscribers?tag=${t.id}`} className="hover:underline">
+                {t.name}
+              </Link>
+              <span className="text-muted-foreground tabular-nums">{t.active}</span>
+              <DeleteTagButton id={t.id} name={t.name} count={t.active} />
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {filtered && total > 0 ? <TagMatching filter={filter} total={total} /> : null}
+
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="font-medium">
-            {q || status ? "No subscribers match these filters" : "No subscribers yet"}
+            {filtered ? "No subscribers match these filters" : "No subscribers yet"}
           </p>
           <p className="text-muted-foreground mt-1 text-sm">
-            {q || status ? (
+            {filtered ? (
               "Try a different search."
             ) : (
               <>
@@ -195,7 +229,26 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
                 const note = stateNote(s, state);
                 return (
                   <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.email}</TableCell>
+                    <TableCell>
+                      <p className="font-medium">{s.email}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {(rowTags.get(s.id) ?? []).map((t) => (
+                          <Link
+                            key={t.id}
+                            href={`/dashboard/subscribers?tag=${t.id}`}
+                            className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs"
+                          >
+                            {t.name}
+                          </Link>
+                        ))}
+                        <EditTags
+                          subscriberId={s.id}
+                          email={s.email}
+                          current={(rowTags.get(s.id) ?? []).map((t) => t.name)}
+                          allTags={allTags.map((t) => t.name)}
+                        />
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={state} />
                       {note ? (

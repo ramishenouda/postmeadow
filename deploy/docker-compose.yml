@@ -71,33 +71,27 @@ services:
     logging: *logging
 
   backup:
-    # Nightly database dump into ./backups, keeping the last 14 days.
-    image: postgres:17-alpine
+    # Nightly database dump into ./backups (14 days), plus an encrypted off-site copy of
+    # the dumps and uploaded images when BACKUP_S3_* is set. See deploy/backup/backup.sh.
+    build: ./backup
     restart: unless-stopped
     environment:
       PGHOST: postgres
       PGUSER: postmeadow
       PGPASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: postmeadow
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:-}
     volumes:
       - ./backups:/backups
+      - storage:/data/storage:ro
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint:
-      - sh
-      - -c
-      - |
-        while true; do
-          file=/backups/postmeadow-$$(date +%Y-%m-%d).dump
-          if pg_dump --format=custom --file="$$file.tmp" && mv "$$file.tmp" "$$file"; then
-            echo "backup ok: $$file"
-          else
-            echo "BACKUP FAILED" >&2
-          fi
-          find /backups -name 'postmeadow-*.dump' -mtime +14 -delete
-          sleep 86400
-        done
     logging: *logging
 
 volumes:

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { webhookEvents } from "@/db/schema";
 import { env } from "@/env";
 import { handleResendEvent, type ResendEvent } from "@/lib/webhooks/resend";
+import { reportError } from "@/lib/report";
 
 /**
  * Resend webhook: bounces, spam complaints and suppressions.
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // Forget the event so the provider's retry is processed.
     await db.delete(webhookEvents).where(eq(webhookEvents.id, id));
-    console.error("Resend webhook failed", { id, type: event.type, error });
+    reportError("Resend webhook failed", error, { id, type: event.type });
     return Response.json({ error: "Processing failed" }, { status: 500 });
   }
 }

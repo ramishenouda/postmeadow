@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { posts, postTemplates, subscribers } from "@/db/schema";
+import { postAudienceTags, posts, postTemplates, tags } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import { requirePublication } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -17,6 +17,8 @@ import { randomToken } from "@/lib/tokens";
 import { env } from "@/env";
 import { isEmailDesign } from "@/lib/email-designs";
 import { starterContent, starterTemplate } from "@/lib/post-templates";
+import { countAudience } from "@/lib/tags";
+import { reportError } from "@/lib/report";
 
 const untitledSlug = () =>
   `untitled-${randomToken()
@@ -109,6 +111,52 @@ export async function saveAsTemplate(postId: string, name: string): Promise<Acti
     emailDesign: post.emailDesign,
   });
   return { ok: true, message: `Saved as template “${cleanName}”. Find it under New post.` };
+}
+
+/**
+ * Who a post goes to: everyone, or active subscribers with any of these tags.
+ * Returns how many that is right now.
+ */
+export async function setPostAudience(
+  postId: string,
+  mode: "everyone" | "tags",
+  tagIds: string[],
+): Promise<{ ok: true; recipients: number } | { ok: false; error: string }> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  if (owned.post.status !== "draft" && owned.post.status !== "scheduled") {
+    return { ok: false, error: "This post has already been sent." };
+  }
+  const publicationId = owned.publication.id;
+  // Only this publication's tags.
+  const valid =
+    mode === "tags" && tagIds.length > 0
+      ? (
+          await db
+            .select({ id: tags.id })
+            .from(tags)
+            .where(
+              and(
+                eq(tags.publicationId, publicationId),
+                inArray(tags.id, tagIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 100)),
+              ),
+            )
+        ).map((t) => t.id)
+      : [];
+
+  await db.transaction(async (tx) => {
+    await tx.update(posts).set({ audience: mode }).where(eq(posts.id, owned.post.id));
+    await tx.delete(postAudienceTags).where(eq(postAudienceTags.postId, owned.post.id));
+    if (valid.length) {
+      await tx
+        .insert(postAudienceTags)
+        .values(valid.map((tagId) => ({ postId: owned.post.id, tagId })));
+    }
+  });
+  return {
+    ok: true,
+    recipients: await countAudience(publicationId, mode === "tags" ? valid : null),
+  };
 }
 
 /** Give one post its own email design, or (null) go back to the publication's. */
@@ -216,7 +264,7 @@ export async function sendTest(postId: string): Promise<ActionResult> {
   try {
     await sendTestEmail(owned.post, owned.publication, owned.user.email);
   } catch (error) {
-    console.error("sendTest failed", error);
+    reportError("sendTest failed", error);
     return { ok: false, error: "The test email couldn't be sent. Check the email settings." };
   }
   return { ok: true, message: `Test sent to ${owned.user.email}` };
@@ -245,6 +293,16 @@ export async function schedulePost(postId: string, at: string): Promise<ActionRe
   }
   const blocker = notReadyToSend(post);
   if (blocker) return { ok: false, error: blocker.replace("sending", "scheduling") };
+  // Problems that would stop it at send time anyway (limits are checked then too).
+  if (owned.publication.suspendedAt) {
+    return { ok: false, error: "Sending is paused on this account." };
+  }
+  if (!owned.publication.postalAddress?.trim()) {
+    return {
+      ok: false,
+      error: "Add your postal address in Settings first. It appears in every email's footer.",
+    };
+  }
 
   const when = new Date(at);
   const ahead = when.getTime() - Date.now();
@@ -254,7 +312,7 @@ export async function schedulePost(postId: string, at: string): Promise<ActionRe
 
   await db
     .update(posts)
-    .set({ status: "scheduled", scheduledAt: when })
+    .set({ status: "scheduled", scheduledAt: when, sendError: null })
     .where(and(eq(posts.id, postId), inArray(posts.status, ["draft", "scheduled"])));
   refresh();
   return { ok: true, message: "Scheduled." };
@@ -296,26 +354,24 @@ export async function sendPost(postId: string): Promise<ActionResult> {
   const blocker = notReadyToSend(post);
   if (blocker) return { ok: false, error: blocker };
 
-  const [{ active }] = await db
-    .select({ active: count() })
-    .from(subscribers)
-    .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.status, "active")));
-  if (active === 0) return { ok: false, error: "You don't have any confirmed subscribers yet." };
-
-  const queued = await queuePost(post.id, publication.id);
-  if (queued === null) return { ok: false, error: "This post has already been sent." };
+  // Suspension, postal address, audience and plan limits are all checked in queuePost.
+  const result = await queuePost(post.id, publication.id);
+  if (result === null) return { ok: false, error: "This post has already been sent." };
+  if ("blocked" in result) return { ok: false, error: result.blocked };
 
   // Respond right away; the batches go out after the response.
-  after(() => processDeliveries(post.id).catch((e) => console.error("send failed", post.id, e)));
+  after(() =>
+    processDeliveries(post.id).catch((e) => reportError("send failed", e, { postId: post.id })),
+  );
   refresh();
-  return { ok: true, message: `Sending to ${queued.toLocaleString("en")} subscribers…` };
+  return { ok: true, message: `Sending to ${result.queued.toLocaleString("en")} subscribers…` };
 }
 
 /** Restarts a send that stopped part-way (e.g. the server restarted). */
 export async function resumeSend(postId: string): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
   if (!owned || owned.post.status !== "sending") return { ok: false, error: "Nothing to resume." };
-  after(() => processDeliveries(postId).catch((e) => console.error("resume failed", postId, e)));
+  after(() => processDeliveries(postId).catch((e) => reportError("resume failed", e, { postId })));
   refresh();
   return { ok: true, message: "Resumed." };
 }

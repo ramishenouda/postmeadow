@@ -213,6 +213,7 @@ export function createEmailMarkdownComponents({
                 return (
                   <Column
                     key={i}
+                    className="pm-col"
                     valign="top"
                     // Gaps split so every column's content is the same width:
                     // with 3 columns, 0+8 | 4+4 | 8+0.

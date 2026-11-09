@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { listImages, storageUsage } from "@/lib/images/service";
+import { DeleteAccount } from "./delete-account";
 import { EmbedSnippets } from "./embed-snippets";
 import { SettingsForm } from "./settings-form";
 import { StorageSection } from "./storage-section";
@@ -27,8 +28,16 @@ export default function SettingsPage() {
       <Suspense fallback={<div className="bg-muted h-48 animate-pulse rounded-xl" />}>
         <Embed />
       </Suspense>
+      <Suspense fallback={null}>
+        <Danger />
+      </Suspense>
     </div>
   );
+}
+
+async function Danger() {
+  const { publication } = await requirePublication();
+  return <DeleteAccount slug={publication.slug} />;
 }
 
 async function Embed() {
@@ -46,6 +55,7 @@ async function Settings() {
         description: publication.description ?? "",
         fromName: publication.fromName,
         replyTo: publication.replyTo ?? "",
+        postalAddress: publication.postalAddress ?? "",
         logoUrl: publication.logoUrl ?? "",
         accentColor: publication.accentColor ?? "",
         fontStyle: publication.fontStyle,

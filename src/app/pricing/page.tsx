@@ -6,7 +6,7 @@ import { SiteFooter, SiteHeader } from "@/components/marketing/site-chrome";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Free forever with every feature. Pro and Business add storage for image-heavy newsletters.",
+    "Free forever with every feature, up to 1,000 subscribers. Pro and Business grow with your list.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -18,7 +18,7 @@ export default function PricingPage() {
         <div className="mx-auto max-w-2xl space-y-3 text-center">
           <h1 className="font-display text-5xl font-semibold tracking-tight">Pricing</h1>
           <p className="text-muted-foreground text-lg">
-            Every feature on every plan. Pay only when you need more storage.
+            Every feature on every plan. Upgrade when your list grows.
           </p>
         </div>
         <div className="mt-12">

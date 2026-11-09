@@ -1,6 +1,7 @@
 /** Slugs that would collide with app routes, since publications live at /{slug}. */
 export const RESERVED_SLUGS = new Set([
   "about",
+  "account-deleted",
   "account",
   "admin",
   "api",
@@ -10,6 +11,8 @@ export const RESERVED_SLUGS = new Set([
   "dashboard",
   "embed",
   "help",
+  "invite",
+  "invites",
   "media",
   "login",
   "logout",
@@ -17,6 +20,7 @@ export const RESERVED_SLUGS = new Set([
   "onboarding",
   "p",
   "pricing",
+  "previews",
   "privacy",
   "settings",
   "sign-in",
@@ -26,6 +30,7 @@ export const RESERVED_SLUGS = new Set([
   "signup",
   "static",
   "support",
+  "templates",
   "terms",
   "unsubscribe",
   "subscription-invalid",

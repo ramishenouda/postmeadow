@@ -23,6 +23,8 @@ export type RenderablePublication = {
   emailDesign?: string | null;
   /** Sender name, used by designs that sign off (Letter). */
   fromName?: string | null;
+  /** Shown in every footer. */
+  postalAddress?: string | null;
 };
 
 export type RenderUrls = {

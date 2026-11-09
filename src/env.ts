@@ -24,6 +24,11 @@ const schema = z
     STORAGE_DIR: z.string().default("./storage"),
     // Max confirmation emails per publication per hour (backstop against sign-up abuse).
     CONFIRMATIONS_PER_PUBLICATION_PER_HOUR: z.coerce.number().int().positive().default(300),
+    // Who can open /admin (comma-separated emails). Also where abuse alerts go.
+    ADMIN_EMAILS: z.string().optional(),
+    // Error monitoring (Sentry). Off unless set. Browser errors also need
+    // NEXT_PUBLIC_SENTRY_DSN at build time (see Dockerfile).
+    SENTRY_DSN: z.url().optional(),
     // Trusted header carrying the client IP (e.g. x-real-ip). See src/lib/client-ip.ts.
     CLIENT_IP_HEADER: z
       .string()

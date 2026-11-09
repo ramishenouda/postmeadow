@@ -15,6 +15,7 @@ const styles: Record<string, string> = {
   hidden: "bg-stone-100 text-stone-600 ring-stone-500/20",
   unsubscribed: "bg-stone-100 text-stone-600 ring-stone-500/20",
   bounced: "bg-red-50 text-red-700 ring-red-600/20",
+  paused: "bg-red-50 text-red-700 ring-red-600/20",
   failed: "bg-red-50 text-red-700 ring-red-600/20",
   complained: "bg-red-50 text-red-700 ring-red-600/20",
 };

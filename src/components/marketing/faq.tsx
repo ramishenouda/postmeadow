@@ -6,6 +6,10 @@ const QUESTIONS: { q: string; a: string }[] = [
     a: `Yes, with no time limit. You get every feature and ${formatBytes(PLANS.free.storageBytes)} of image storage. Upgrade only if you need more room.`,
   },
   {
+    q: "What happens when I reach my plan's limits?",
+    a: `Nobody is turned away: people can keep subscribing. Sending pauses until you upgrade (or, for the monthly email limit, until next month). Free includes ${PLANS.free.subscribers.toLocaleString("en")} subscribers and ${PLANS.free.emailsPerMonth.toLocaleString("en")} emails a month.`,
+  },
+  {
     q: "What counts toward storage?",
     a: "Images you upload: pictures in your posts and your logo. They're resized and compressed on upload, so they take far less space than the originals.",
   },

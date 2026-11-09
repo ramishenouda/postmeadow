@@ -2,7 +2,15 @@ import "server-only";
 import { and, count, eq, inArray, lt, sql } from "drizzle-orm";
 import { revalidatePublicTag } from "@/lib/revalidate";
 import { db } from "@/db";
-import { deliveries, deliveryLinkClicks, posts, publications, subscribers } from "@/db/schema";
+import {
+  deliveries,
+  deliveryLinkClicks,
+  postAudienceTags,
+  posts,
+  publications,
+  subscribers,
+  subscriberTags,
+} from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import {
   getEmailRenderer,
@@ -10,6 +18,7 @@ import {
   type RenderedEmail,
 } from "@/lib/email/renderers";
 import { batchTransport, fromWithName, sendEmail, type EmailMessage } from "@/lib/email/send";
+import { accountUsage, limitBlocker, recordEmails } from "@/lib/limits";
 import { postUrl, publicationUrl, unsubscribeOneClickUrl, unsubscribePageUrl } from "@/lib/urls";
 
 type Post = typeof posts.$inferSelect;
@@ -52,36 +61,87 @@ export async function sendTestEmail(post: Post, publication: Publication, to: st
   });
 }
 
+/** A send that isn't allowed: the post stays as it was (draft or scheduled). */
+class SendBlocked extends Error {}
+
+export type QueueResult = { queued: number } | { blocked: string } | null;
+
 /**
- * Locks the post (draft or scheduled → sending) and queues one delivery per active
- * subscriber. Returns the number queued, or null if another request or the scheduler
- * got there first. The status change is atomic, so a post is only ever queued once.
+ * The one gate every send goes through ("Send now" and scheduled sends): checks the
+ * publication may send (not suspended, postal address set), picks the audience, and
+ * checks the plan's limits, then marks the post as sending and queues one delivery
+ * per recipient. All or nothing, in one transaction.
+ *
+ * Returns null if the post is no longer draft/scheduled (someone else took it).
  */
-export async function queuePost(postId: string, publicationId: string): Promise<number | null> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .update(posts)
-      .set({ status: "sending", publishedAt: new Date(), scheduledAt: null })
-      .where(
-        and(
-          eq(posts.id, postId),
-          eq(posts.publicationId, publicationId),
-          inArray(posts.status, ["draft", "scheduled"]),
-        ),
-      )
-      .returning({ id: posts.id });
-    if (!locked) return null;
+export async function queuePost(postId: string, publicationId: string): Promise<QueueResult> {
+  const [publication] = await db
+    .select({
+      ownerId: publications.ownerId,
+      suspendedAt: publications.suspendedAt,
+      postalAddress: publications.postalAddress,
+    })
+    .from(publications)
+    .where(eq(publications.id, publicationId));
+  if (!publication) return null;
+  const usage = await accountUsage(publication.ownerId);
 
-    const queued = await tx.execute<{ id: string }>(sql`
-      insert into ${deliveries} (post_id, subscriber_id)
-      select ${postId}, id from ${subscribers}
-      where publication_id = ${publicationId} and status = 'active'
-      on conflict do nothing
-      returning id
-    `);
+  try {
+    return await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .update(posts)
+        .set({ status: "sending", publishedAt: new Date(), scheduledAt: null, sendError: null })
+        .where(
+          and(
+            eq(posts.id, postId),
+            eq(posts.publicationId, publicationId),
+            inArray(posts.status, ["draft", "scheduled"]),
+          ),
+        )
+        .returning({ id: posts.id, audience: posts.audience });
+      if (!locked) return null;
 
-    return queued.length;
-  });
+      if (publication.suspendedAt) {
+        throw new SendBlocked(
+          "Sending is paused on this account. Reply to any email from us, or contact support, to sort it out.",
+        );
+      }
+      if (!publication.postalAddress?.trim()) {
+        throw new SendBlocked(
+          "Add your postal address in Settings first. The law requires one in every newsletter, and it appears in the footer.",
+        );
+      }
+
+      const tagged = locked.audience === "tags";
+      const queued = await tx.execute<{ id: string }>(sql`
+        insert into ${deliveries} (post_id, subscriber_id)
+        select ${postId}, s.id from ${subscribers} s
+        where s.publication_id = ${publicationId} and s.status = 'active'
+          and (${!tagged} or exists (
+            select 1 from ${subscriberTags} st
+            join ${postAudienceTags} pat on pat.tag_id = st.tag_id
+            where pat.post_id = ${postId} and st.subscriber_id = s.id
+          ))
+        on conflict do nothing
+        returning id
+      `);
+      if (queued.length === 0) {
+        throw new SendBlocked(
+          tagged
+            ? "Nobody on your list has the tags this post is going to."
+            : "You don't have any confirmed subscribers yet.",
+        );
+      }
+
+      const blocked = limitBlocker(usage, queued.length);
+      if (blocked) throw new SendBlocked(blocked);
+      await recordEmails(tx, publication.ownerId, queued.length);
+      return { queued: queued.length };
+    });
+  } catch (error) {
+    if (error instanceof SendBlocked) return { blocked: error.message };
+    throw error;
+  }
 }
 
 /**
@@ -110,6 +170,8 @@ async function processDeliveriesOnce(postId: string): Promise<void> {
     .where(eq(posts.id, postId));
   if (!row || row.post.status !== "sending") return;
   const { post, publication } = row;
+  // A paused publication sends nothing more; the rest stays queued until it's resumed.
+  if (publication.suspendedAt) return;
 
   // Re-queue rows claimed by a worker that died mid-batch.
   await db
@@ -128,6 +190,13 @@ async function processDeliveriesOnce(postId: string): Promise<void> {
   const from = fromWithName(publication.fromName);
 
   for (;;) {
+    // Paused mid-send (an admin, or the automatic spam-report check): stop here.
+    const [state] = await db
+      .select({ suspendedAt: publications.suspendedAt })
+      .from(publications)
+      .where(eq(publications.id, publication.id));
+    if (state?.suspendedAt) return;
+
     const claimed = await db.execute<{ id: string; subscriber_id: string }>(sql`
       update ${deliveries} set status = 'sending', updated_at = now()
       where id in (

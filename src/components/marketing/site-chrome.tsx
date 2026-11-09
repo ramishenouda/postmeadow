@@ -56,7 +56,7 @@ export function SiteFooter() {
           <Wordmark size="sm" className="text-foreground" />
           <p className="text-xs">A calm home for your newsletter.</p>
         </div>
-        <nav className="flex gap-5" aria-label="Footer">
+        <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Footer">
           <Link href="/pricing" className="hover:text-foreground">
             Pricing
           </Link>
@@ -65,6 +65,12 @@ export function SiteFooter() {
           </Link>
           <Link href="/sign-in" className="hover:text-foreground">
             Start free
+          </Link>
+          <Link href="/terms" className="hover:text-foreground">
+            Terms
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy
           </Link>
         </nav>
       </div>

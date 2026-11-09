@@ -78,8 +78,16 @@ pipeline only ever sees the finished HTML and text.
       nightly backups), GitHub Actions deploy, guide in `deploy/README.md`. Target:
       Hostinger KVM 2 (Frankfurt) now, Hetzner later.
 - [ ] **Going live**: follow `deploy/README.md` on the server; Resend and Stripe in
-      live mode; off-server backup copies; error monitoring.
-- [ ] **Before launch**: Free-plan sending limits (email cost scales with subscribers).
+      live mode; fill in `src/lib/legal.ts` and have the legal pages reviewed; set
+      `ADMIN_EMAILS`, `SENTRY_DSN` and the `BACKUP_S3_*` settings.
+- [x] **Launch readiness**: plan limits (Free 1,000 subscribers / 10,000 emails a month,
+      Pro 10,000 / 100,000, Business 50,000 / 500,000; sending pauses, sign-ups don't),
+      postal address in every footer (required to send), terms and privacy pages,
+      account deletion, admin page with pause switch and automatic pausing on high
+      spam-report or bounce rates, Sentry, encrypted off-site backups (S3-compatible).
+- [x] **Tags and segments**: tag subscribers (one by one, everyone a filter shows, on
+      import, or from sign-up forms with existing tags); send a post to everyone or to
+      subscribers with any of chosen tags.
 - [x] **Email templates**: four email designs (Classic, Minimal, Letter, Magazine),
       five starter post templates, and saved templates per publication.
 - [x] **Colourful newsletters**: Boutique, Launch and Arcade designs (cover photos, dark
@@ -95,7 +103,7 @@ pipeline only ever sees the finished HTML and text.
       that also resumes interrupted sends), embeddable signup forms, SEO basics
       (sitemap, robots, canonical), editing/unpublishing sent posts, growth chart.
 - [ ] **Next competitive features**: custom domains per publication, importing posts
-      from Substack/beehiiv/Ghost, tags and segments, paid newsletters (Stripe Connect).
+      from Substack/beehiiv/Ghost, paid newsletters (Stripe Connect).
 
 ## After the MVP
 

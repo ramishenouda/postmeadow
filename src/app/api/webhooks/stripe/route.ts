@@ -5,6 +5,7 @@ import { webhookEvents } from "@/db/schema";
 import { env } from "@/env";
 import { getStripe } from "@/lib/billing/stripe";
 import { applySubscription, linkCustomer } from "@/lib/billing/sync";
+import { reportError } from "@/lib/report";
 
 /**
  * Stripe webhook: the only place a plan changes. In Stripe → Developers → Webhooks,
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // Forget the event so Stripe's retry is processed.
     await db.delete(webhookEvents).where(eq(webhookEvents.id, event.id));
-    console.error("Stripe webhook failed", { id: event.id, type: event.type, error });
+    reportError("Stripe webhook failed", error, { id: event.id, type: event.type });
     return Response.json({ error: "Processing failed" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { getSession } from "@/lib/dal";
 import { ImageError, MAX_UPLOAD_BYTES } from "@/lib/images/process";
 import { saveImage } from "@/lib/images/service";
 import { hit } from "@/lib/rate-limit";
+import { reportError } from "@/lib/report";
 
 /** Upload an image (multipart form, field "file"). Returns { id, url, width, height, bytes }. */
 export async function POST(request: Request) {
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     if (error instanceof ImageError) {
       return Response.json({ error: error.message }, { status: error.status });
     }
-    console.error("upload failed", error);
+    reportError("upload failed", error);
     return Response.json({ error: "Upload failed. Try again." }, { status: 500 });
   }
 }

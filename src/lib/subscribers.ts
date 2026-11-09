@@ -10,6 +10,7 @@ import { renderEmail } from "@/lib/email/render";
 import { hit, RateLimitError } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email/send";
 import { randomToken } from "@/lib/tokens";
+import { addTags, findTags } from "@/lib/tags";
 import { confirmUrl } from "@/lib/urls";
 import { CONFIRM_TTL_DAYS } from "./subscriber-state";
 
@@ -40,7 +41,11 @@ type Publication = { id: string; name: string };
  * Double opt-in. Always behaves the same from the outside, so the form can't be
  * used to find out who is subscribed.
  */
-export async function requestSubscription(publication: Publication, email: string) {
+export async function requestSubscription(
+  publication: Publication,
+  email: string,
+  tagNames: string[] = [],
+) {
   const [existing] = await db
     .select()
     .from(subscribers)
@@ -67,6 +72,7 @@ export async function requestSubscription(publication: Publication, email: strin
   const token = randomToken();
   const now = new Date();
 
+  let subscriberId = existing?.id;
   if (existing) {
     await db
       .update(subscribers)
@@ -94,6 +100,17 @@ export async function requestSubscription(publication: Publication, email: strin
       .returning({ id: subscribers.id });
     // Lost a race with a concurrent signup for the same address; that one sends the email.
     if (inserted.length === 0) return;
+    subscriberId = inserted[0].id;
+  }
+
+  // Tags from the form (e.g. a "beta" sign-up form). Only tags the writer already
+  // made: a public form must not create tags.
+  if (tagNames.length > 0 && subscriberId) {
+    const found = await findTags(publication.id, tagNames);
+    await addTags(
+      [subscriberId],
+      found.map((t) => t.id),
+    );
   }
 
   const { html, text } = await renderEmail(

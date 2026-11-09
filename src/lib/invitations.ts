@@ -77,6 +77,7 @@ export async function inviteOne(publication: Publication, email: string): Promis
     .from(subscribers)
     .where(and(eq(subscribers.publicationId, publication.id), eq(subscribers.email, email)))
     .limit(1);
+  if (publication.suspendedAt) return { ok: false, error: "Sending is paused on this account." };
   const blocked = inviteBlocker(existing, email);
   if (blocked) return { ok: false, error: blocked };
 
@@ -113,6 +114,7 @@ export async function inviteOne(publication: Publication, email: string): Promis
         confirmSentAt: now,
         invitedAt: now,
         inviteCount: 1,
+        source: "invite",
         unsubscribeToken: randomToken(),
       })
       .onConflictDoNothing()
@@ -138,6 +140,7 @@ export async function createInvitations(
   | { ok: true; invited: { email: string; token: string; sentAt: Date }[]; existing: number }
   | { ok: false; error: string }
 > {
+  if (publication.suspendedAt) return { ok: false, error: "Sending is paused on this account." };
   const known = new Set<string>();
   for (let i = 0; i < emails.length; i += CHUNK) {
     const rows = await db
@@ -175,6 +178,7 @@ export async function createInvitations(
       confirmSentAt: now,
       invitedAt: now,
       inviteCount: 1,
+      source: "import",
       unsubscribeToken: randomToken(),
     }));
     const inserted = await db

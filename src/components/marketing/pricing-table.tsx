@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 /** What every plan includes. Plans differ in storage. */
 export const INCLUDED = [
-  "Unlimited posts and subscribers",
+  "Unlimited posts",
   "Rich-text editor with image uploads",
   "Branded emails and public archive",
   "Double opt-in and one-click unsubscribe",
@@ -70,7 +70,11 @@ export function PricingTable() {
                 </p>
               ) : null}
               <ul className="mt-6 flex-1 space-y-2 text-sm">
-                <Feature strong>{formatBytes(PLANS[id].storageBytes)} image storage</Feature>
+                <Feature strong>
+                  Up to {PLANS[id].subscribers.toLocaleString("en")} subscribers
+                </Feature>
+                <Feature>{PLANS[id].emailsPerMonth.toLocaleString("en")} emails a month</Feature>
+                <Feature>{formatBytes(PLANS[id].storageBytes)} image storage</Feature>
                 {id !== "free" ? (
                   <Feature>
                     Add {formatBytes(STORAGE_ADDON_BYTES)} for{" "}

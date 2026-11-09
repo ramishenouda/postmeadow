@@ -18,10 +18,13 @@ COPY . .
 # The public URL is baked into pages built ahead of time (canonical and social-preview
 # links on / and /pricing). Not a secret; the deploy workflow passes the real one.
 ARG APP_URL=https://postmeadow.com
+# Optional: report browser errors to Sentry (the DSN is public by design).
+ARG NEXT_PUBLIC_SENTRY_DSN=
 # Placeholders, only for this command, so environment validation passes while building.
 # Nothing secret is baked in; the real values come from the server's .env at runtime.
 RUN NEXT_OUTPUT=standalone \
     APP_URL=$APP_URL \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     DATABASE_URL=postgres://build:build@build.invalid:5432/build \
     BETTER_AUTH_SECRET=build-time-placeholder-never-used-at-runtime \
     EMAIL_FROM="Postmeadow <build@build.invalid>" \

@@ -18,6 +18,7 @@ type Values = {
   description: string;
   fromName: string;
   replyTo: string;
+  postalAddress: string;
   logoUrl: string;
   accentColor: string;
   fontStyle: string;
@@ -43,7 +44,7 @@ export function SettingsForm({ address, values }: { address: string; values: Val
           <Field id="name" label="Name" error={errors.name}>
             <Input id="name" name="name" defaultValue={v.name} maxLength={80} required />
           </Field>
-          <Field id="address" label="Address" hint="The address can't be changed.">
+          <Field id="address" label="Web address" hint="The web address can't be changed.">
             <Input id="address" value={address} readOnly disabled />
           </Field>
           <Field id="description" label="Description" error={errors.description}>
@@ -69,6 +70,21 @@ export function SettingsForm({ address, values }: { address: string; values: Val
               <Input id="replyTo" name="replyTo" type="email" defaultValue={v.replyTo} />
             </Field>
           </div>
+          <Field
+            id="postalAddress"
+            label="Postal address"
+            error={errors.postalAddress}
+            hint="Shown in the footer of every email. Anti-spam laws require one, so you can't send without it. A PO box or business address works."
+          >
+            <Textarea
+              id="postalAddress"
+              name="postalAddress"
+              defaultValue={v.postalAddress}
+              maxLength={300}
+              rows={2}
+              placeholder={"Postmeadow Ltd, 1 Example Street\n10115 Berlin, Germany"}
+            />
+          </Field>
         </CardContent>
       </Card>
 

@@ -31,7 +31,7 @@ export function EmbedSnippets({ origin, slug }: { origin: string; slug: string }
         />
         <Snippet
           label="Plain HTML form"
-          hint="Unstyled, so it matches your site. After subscribing, readers see a “check your inbox” page here."
+          hint="Unstyled, so it matches your site. After subscribing, readers see a “check your inbox” page here. To tag people who sign up with it, add <input type='hidden' name='tag' value='your-tag'> (the tag must already exist)."
           code={form}
         />
       </CardContent>

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { publications } from "@/db/schema";
 import { hit, RateLimitError } from "@/lib/rate-limit";
 import { emailSchema, requestSubscription } from "@/lib/subscribers";
+import { reportError } from "@/lib/report";
 
 /** Per visitor: generous for a shared office/home IP, useless for a bot. */
 const PER_IP = { limit: 10, windowSeconds: 10 * 60 };
@@ -26,6 +27,8 @@ export async function handleSubscribeRequest(input: {
   slug: string;
   email: string;
   honeypot: string;
+  /** Names of existing tags to give the new sign-up (unknown names are ignored). */
+  tags?: string[];
   ip: string;
 }): Promise<SubscribeResult> {
   // Honeypot: real people never fill in this hidden field. Pretend it worked.
@@ -64,12 +67,12 @@ export async function handleSubscribeRequest(input: {
   }
 
   try {
-    await requestSubscription(publication, parsed.data);
+    await requestSubscription(publication, parsed.data, input.tags ?? []);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { status: "error", code: "paused", message: error.message, email: input.email };
     }
-    console.error("subscribe failed", error);
+    reportError("subscribe failed", error);
     return {
       status: "error",
       code: "send-failed",

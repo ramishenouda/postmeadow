@@ -31,6 +31,13 @@ export const publicationSettingsSchema = z.object({
       `Too light to read on white. Pick a darker colour (contrast of at least ${MIN_ACCENT_CONTRAST}:1).`,
     ),
   fontStyle: z.enum(["sans", "serif"]).optional().default("sans"),
+  // Shown in every email's footer; required before sending (anti-spam laws).
+  postalAddress: z
+    .string()
+    .trim()
+    .max(300, "Keep the address under 300 characters")
+    .optional()
+    .transform((v) => v || null),
 });
 
 /** Settings plus the address, which is chosen once at creation. */

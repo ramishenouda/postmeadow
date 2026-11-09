@@ -13,21 +13,29 @@ export async function POST(
 ) {
   const { slug } = await params;
   // A body can only be read once, so pick the parser from the Content-Type.
-  let fields: { email?: unknown; website?: unknown };
+  let fields: { email?: unknown; website?: unknown; tag?: unknown };
   try {
-    fields = request.headers.get("content-type")?.includes("application/json")
-      ? await request.json()
-      : Object.fromEntries(await request.formData());
+    if (request.headers.get("content-type")?.includes("application/json")) {
+      fields = await request.json();
+    } else {
+      const form = await request.formData();
+      // "tag" may repeat: <input type="hidden" name="tag" value="…"> once per tag.
+      fields = { ...Object.fromEntries(form), tag: form.getAll("tag") };
+    }
   } catch {
     return NextResponse.json({ error: "Send an email field." }, { status: 400 });
   }
   const email = String(fields?.email ?? "");
   const honeypot = String(fields?.website ?? "");
+  const tags = (Array.isArray(fields?.tag) ? fields.tag : fields?.tag ? [fields.tag] : [])
+    .map(String)
+    .slice(0, 10);
 
   const result = await handleSubscribeRequest({
     slug,
     email,
     honeypot,
+    tags,
     ip: clientIp(request.headers),
   });
 

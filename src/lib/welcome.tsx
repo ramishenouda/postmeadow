@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { publications, subscribers } from "@/db/schema";
 import { createEmailMarkdownComponents } from "@/emails/components/markdown-email";
-import WelcomeEmail from "@/emails/welcome";
+import NewsletterEmail from "@/emails/newsletter";
+import { isEmailDesign } from "@/lib/email-designs";
 import { DEFAULT_ACCENT } from "@/lib/color";
 import { renderEmail } from "@/lib/email/render";
 import { fromWithName, sendEmail } from "@/lib/email/send";
@@ -24,16 +25,29 @@ export async function sendWelcomeEmail(subscriberId: string): Promise<boolean> {
   const { subscriber, publication } = row;
   const accent = publication.accentColor ?? DEFAULT_ACCENT;
   const message = publication.welcomeMessage?.trim() || DEFAULT_WELCOME_MESSAGE;
+  // The same frame as the publication's issues: its design, brand and postal address.
+  const design = isEmailDesign(publication.emailDesign) ? publication.emailDesign : "classic";
+  const unsubscribeUrl = unsubscribePageUrl(subscriber.unsubscribeToken);
 
   const { html, text } = await renderEmail(
-    <WelcomeEmail
+    <NewsletterEmail
+      design={design}
       publicationName={publication.name}
       publicationUrl={publicationUrl(publication.slug)}
-      unsubscribeUrl={unsubscribePageUrl(subscriber.unsubscribeToken)}
+      title={`Welcome to ${publication.name}`}
+      subtitle={publication.description}
+      preview={`Welcome to ${publication.name}`}
+      webUrl={publicationUrl(publication.slug)}
+      unsubscribeUrl={unsubscribeUrl}
+      senderName={publication.fromName}
+      postalAddress={publication.postalAddress}
       brand={{ logoUrl: publication.logoUrl, accent, fontStyle: publication.fontStyle }}
     >
-      {renderMarkdownTree(parseMarkdown(message), createEmailMarkdownComponents({ accent }))}
-    </WelcomeEmail>,
+      {renderMarkdownTree(
+        parseMarkdown(message),
+        createEmailMarkdownComponents({ accent, design }),
+      )}
+    </NewsletterEmail>,
   );
 
   await sendEmail({

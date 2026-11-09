@@ -38,6 +38,7 @@ import {
   sendTest,
   unschedulePost,
   saveAsTemplate,
+  setPostAudience,
   setPostDesign,
   type PostInput,
 } from "../actions";
@@ -64,6 +65,10 @@ export function PostEditor({
   scheduledAt = null,
   design: initialDesign = null,
   defaultDesign = "classic",
+  sendError = null,
+  tags = [],
+  audience: initialAudience = { mode: "everyone", tagIds: [] },
+  recipients: initialRecipients = activeSubscribers,
 }: {
   post: Draft;
   urlPrefix: string;
@@ -76,6 +81,14 @@ export function PostEditor({
   /** This post's own email design; null uses the publication's (`defaultDesign`). */
   design?: string | null;
   defaultDesign?: string;
+  /** Why the last (scheduled) send was refused. */
+  sendError?: string | null;
+  /** The publication's tags, with active subscribers per tag. */
+  tags?: { id: string; name: string; active: number }[];
+  /** Who it goes to: everyone, or subscribers with any of these tags. */
+  audience?: { mode: "everyone" | "tags"; tagIds: string[] };
+  /** How many active subscribers that audience is right now. */
+  recipients?: number;
 }) {
   const sentMode = mode === "sent";
   const [title, setTitle] = useState(post.title);
@@ -91,6 +104,16 @@ export function PostEditor({
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [design, setDesign] = useState<string | null>(initialDesign);
+  const [audience, setAudience] = useState(initialAudience);
+  const [recipients, setRecipients] = useState(initialRecipients);
+  const changeAudience = (next: { mode: "everyone" | "tags"; tagIds: string[] }) => {
+    setAudience(next);
+    startTransition(async () => {
+      const result = await setPostAudience(post.id, next.mode, next.tagIds);
+      if (result.ok) setRecipients(result.recipients);
+      else setNotice({ kind: "error", text: result.error });
+    });
+  };
   const [busy, startTransition] = useTransition();
 
   // Bumped on every edit; a save only marks "saved" if nothing changed meanwhile.
@@ -228,6 +251,10 @@ export function PostEditor({
               <SendDialog
                 title={title}
                 activeSubscribers={activeSubscribers}
+                recipients={recipients}
+                tags={tags}
+                audience={audience}
+                onAudience={changeAudience}
                 scheduledAt={scheduledAt}
                 disabled={busy}
                 onSendNow={() => run(() => sendPost(post.id))}
@@ -257,6 +284,15 @@ export function PostEditor({
             Unschedule
           </Button>
         </div>
+      ) : null}
+
+      {sendError && !notice ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-600/20 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          <strong>This post was scheduled but not sent.</strong> {sendError}
+        </p>
       ) : null}
 
       {notice ? (
@@ -468,6 +504,10 @@ function defaultScheduleTime(scheduledAt: string | null): string {
 function SendDialog({
   title,
   activeSubscribers,
+  recipients,
+  tags,
+  audience,
+  onAudience,
   scheduledAt,
   disabled,
   onSendNow,
@@ -475,6 +515,10 @@ function SendDialog({
 }: {
   title: string;
   activeSubscribers: number;
+  recipients: number;
+  tags: { id: string; name: string; active: number }[];
+  audience: { mode: "everyone" | "tags"; tagIds: string[] };
+  onAudience: (next: { mode: "everyone" | "tags"; tagIds: string[] }) => void;
   scheduledAt: string | null;
   disabled: boolean;
   onSendNow: () => void;
@@ -483,7 +527,16 @@ function SendDialog({
   const [open, setOpen] = useState(false);
   const [when, setWhen] = useState<"now" | "later">(scheduledAt ? "later" : "now");
   const [at, setAt] = useState(() => defaultScheduleTime(scheduledAt));
-  const people = `${activeSubscribers.toLocaleString("en")} ${activeSubscribers === 1 ? "subscriber" : "subscribers"}`;
+  const count = (n: number) =>
+    `${n.toLocaleString("en")} ${n === 1 ? "subscriber" : "subscribers"}`;
+  const people = count(recipients);
+  const toggleTag = (id: string) =>
+    onAudience({
+      mode: "tags",
+      tagIds: audience.tagIds.includes(id)
+        ? audience.tagIds.filter((t) => t !== id)
+        : [...audience.tagIds, id],
+    });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -509,7 +562,53 @@ function SendDialog({
             </DialogDescription>
           </DialogHeader>
           <fieldset className="space-y-2">
-            <legend className="sr-only">When</legend>
+            <legend className="mb-1 text-sm font-medium">Who</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="audience"
+                checked={audience.mode === "everyone"}
+                onChange={() => onAudience({ mode: "everyone", tagIds: [] })}
+              />
+              Everyone ({count(activeSubscribers)})
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="audience"
+                checked={audience.mode === "tags"}
+                disabled={tags.length === 0}
+                onChange={() => onAudience({ mode: "tags", tagIds: audience.tagIds })}
+              />
+              Only subscribers with these tags
+              {tags.length === 0 ? (
+                <span className="text-muted-foreground text-xs">(tag subscribers first)</span>
+              ) : null}
+            </label>
+            {audience.mode === "tags" ? (
+              <div className="flex flex-wrap gap-1.5 pl-6">
+                {tags.map((t) => {
+                  const on = audience.tagIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleTag(t.id)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                        on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
+                      )}
+                    >
+                      {t.name} <span className="opacity-70">{t.active.toLocaleString("en")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium">When</legend>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -540,13 +639,13 @@ function SendDialog({
                 />
                 <p className="text-muted-foreground text-xs">
                   Your time zone ({Intl.DateTimeFormat().resolvedOptions().timeZone}). It goes to
-                  everyone subscribed at that moment.
+                  everyone in this audience at that moment.
                 </p>
               </div>
             ) : null}
           </fieldset>
           <DialogFooter>
-            <Button type="submit" disabled={when === "now" && activeSubscribers === 0}>
+            <Button type="submit" disabled={recipients === 0}>
               {when === "now" ? `Send to ${people}` : "Schedule"}
             </Button>
           </DialogFooter>

@@ -35,8 +35,17 @@ export default function SignInPage() {
               <SignInForm />
             </Suspense>
           </div>
-          <p className="text-muted-foreground text-center text-xs">
-            New here? The same link creates your account. Free, no card needed.
+          <p className="text-muted-foreground text-center text-xs leading-5">
+            New here? The same link creates your account. Free, no card needed. By continuing you
+            agree to the{" "}
+            <Link href="/terms" className="underline underline-offset-2">
+              terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline underline-offset-2">
+              privacy policy
+            </Link>
+            .
           </p>
         </div>
       </div>

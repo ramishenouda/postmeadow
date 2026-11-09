@@ -11,6 +11,7 @@ import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { subscriberGrowth } from "@/lib/growth";
+import { accountUsage, nearLimit, type AccountUsage } from "@/lib/limits";
 import { subscriberStateWhere } from "@/lib/subscribers";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ async function Dashboard() {
       .from(subscribers)
       .where(and(eq(subscribers.publicationId, publication.id), where));
 
-  const [[active], [pending], [sentPosts], recent, growth] = await Promise.all([
+  const [[active], [pending], [sentPosts], recent, growth, usage] = await Promise.all([
     countSubscribers(subscriberStateWhere("active")),
     // Still able to answer: invited, or signed up and not yet confirmed (not expired).
     countSubscribers(
@@ -58,6 +59,7 @@ async function Dashboard() {
       .orderBy(desc(posts.updatedAt))
       .limit(5),
     subscriberGrowth(publication.id, 30),
+    accountUsage(publication.ownerId),
   ]);
   const gained = growth.reduce((n, d) => n + d.gained, 0);
   const lost = growth.reduce((n, d) => n + d.lost, 0);
@@ -110,6 +112,13 @@ async function Dashboard() {
           New post
         </Link>
       </div>
+
+      <AccountNotices
+        suspended={publication.suspendedAt !== null}
+        suspendedReason={publication.suspendedReason}
+        missingAddress={!publication.postalAddress?.trim()}
+        usage={usage}
+      />
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Stat label="Subscribers" value={active.n} href="/dashboard/subscribers?status=active" />
@@ -228,6 +237,88 @@ function DashboardSkeleton() {
         ))}
       </div>
       <div className="bg-muted h-48 animate-pulse rounded-xl" />
+    </div>
+  );
+}
+
+/** Things that stop or will soon stop sending, most serious first. */
+function AccountNotices({
+  suspended,
+  suspendedReason,
+  missingAddress,
+  usage,
+}: {
+  suspended: boolean;
+  suspendedReason: string | null;
+  missingAddress: boolean;
+  usage: AccountUsage;
+}) {
+  const limit = nearLimit(usage);
+  const notices: { tone: "danger" | "warn"; body: React.ReactNode }[] = [];
+  if (suspended) {
+    notices.push({
+      tone: "danger",
+      body: (
+        <>
+          <strong>Sending is paused on this account.</strong>{" "}
+          {suspendedReason ? `${suspendedReason} ` : ""}Reply to any email from us to sort it out.
+        </>
+      ),
+    });
+  }
+  if (missingAddress) {
+    notices.push({
+      tone: "warn",
+      body: (
+        <>
+          <strong>Add your postal address before you send.</strong> The law requires one in every
+          newsletter.{" "}
+          <Link href="/dashboard/settings#postalAddress" className="underline">
+            Add it in Settings
+          </Link>
+          .
+        </>
+      ),
+    });
+  }
+  if (limit) {
+    const fmt = (n: number) => n.toLocaleString("en");
+    notices.push({
+      tone: limit === "over" ? "danger" : "warn",
+      body: (
+        <>
+          <strong>
+            {limit === "over"
+              ? `You've reached the ${usage.planName} plan's limit.`
+              : `You're close to the ${usage.planName} plan's limit.`}
+          </strong>{" "}
+          {fmt(usage.subscribers.used)} of {fmt(usage.subscribers.limit)} subscribers,{" "}
+          {fmt(usage.emails.used)} of {fmt(usage.emails.limit)} emails this month.{" "}
+          <Link href="/dashboard/billing" className="underline">
+            See plans
+          </Link>
+          .
+        </>
+      ),
+    });
+  }
+  if (notices.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {notices.map((n, i) => (
+        <p
+          key={i}
+          role={n.tone === "danger" ? "alert" : "status"}
+          className={cn(
+            "rounded-lg border px-3 py-2 text-sm",
+            n.tone === "danger"
+              ? "border-destructive/30 bg-destructive/5 text-destructive"
+              : "border-amber-600/20 bg-amber-50 text-amber-900",
+          )}
+        >
+          {n.body}
+        </p>
+      ))}
     </div>
   );
 }

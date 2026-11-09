@@ -20,7 +20,7 @@ type State =
 
 /** Only same-site paths in the dashboard; never an outside URL (open redirect). */
 function safeNext(value: string | null): string {
-  return value && /^\/dashboard(\/[\w\-/?=&.%]*)?$/.test(value) ? value : "/dashboard";
+  return value && /^\/(dashboard|admin)(\/[\w\-/?=&.%]*)?$/.test(value) ? value : "/dashboard";
 }
 
 export function SignInForm() {

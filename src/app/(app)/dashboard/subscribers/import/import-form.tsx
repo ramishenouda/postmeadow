@@ -64,6 +64,19 @@ export function ImportForm() {
               placeholder={"ada@example.com\ngrace@example.com"}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="tags">Tags (optional)</Label>
+            <Input
+              id="tags"
+              name="tags"
+              placeholder="e.g. customers, spring-fair"
+              maxLength={300}
+            />
+            <p className="text-muted-foreground text-xs">
+              Everyone in this import gets these tags, including people already on your list. Use
+              them to send to just this group later.
+            </p>
+          </div>
           <fieldset className="space-y-2">
             <legend className="mb-2 text-sm font-medium">How should they be added?</legend>
             {(
