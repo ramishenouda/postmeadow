@@ -45,6 +45,10 @@ export async function requestSubscription(
   publication: Publication,
   email: string,
   tagNames: string[] = [],
+  {
+    signupPostId = null,
+    referrerId = null,
+  }: { signupPostId?: string | null; referrerId?: string | null } = {},
 ) {
   const [existing] = await db
     .select()
@@ -95,6 +99,9 @@ export async function requestSubscription(
         confirmToken: token,
         confirmSentAt: now,
         unsubscribeToken: randomToken(),
+        signupPostId,
+        referredBy: referrerId,
+        source: referrerId ? "referral" : "signup",
       })
       .onConflictDoNothing()
       .returning({ id: subscribers.id });

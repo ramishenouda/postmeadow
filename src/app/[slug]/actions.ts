@@ -18,6 +18,9 @@ export async function subscribe(
     slug,
     email: String(formData.get("email") ?? ""),
     honeypot: String(formData.get("website") ?? ""),
+    tags: formData.getAll("tag").map(String).slice(0, 20),
+    postSlug: String(formData.get("post") ?? "") || undefined,
+    ref: String(formData.get("ref") ?? "") || undefined,
     ip: clientIp(await headers()),
   });
   if (result.status === "success") return result;

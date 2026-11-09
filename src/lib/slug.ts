@@ -26,6 +26,7 @@ export const RESERVED_SLUGS = new Set([
   "sign-in",
   "sign-out",
   "sign-up",
+  "sponsor",
   "signin",
   "signup",
   "static",

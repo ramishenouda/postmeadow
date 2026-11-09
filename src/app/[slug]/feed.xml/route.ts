@@ -6,6 +6,8 @@ import { parseMarkdown } from "@/lib/markdown/parse";
 import { renderMarkdownTree } from "@/lib/markdown/render";
 import { getFeedPosts, getPublicPublication } from "@/lib/public-data";
 import { absoluteUrl, postUrl, publicationUrl } from "@/lib/urls";
+import { liveDomain } from "@/lib/domains";
+import { previewMarkdown } from "@/lib/paid-preview";
 
 const escapeXml = (s: string) =>
   s.replace(
@@ -25,7 +27,12 @@ export async function GET(_request: Request, { params }: RouteContext<"/[slug]/f
 
   const items = await Promise.all(
     posts.map(async (post) => {
-      const tree = parseMarkdown(post.content);
+      // Paid posts: only the free beginning goes in the feed.
+      const tree = parseMarkdown(
+        post.paid
+          ? `${previewMarkdown(post.content).preview}\n\n*The rest is for paid subscribers.*`
+          : post.content,
+      );
       // Next.js doesn't allow react-dom/server in app routes; React Email's renderer is fine.
       // It adds an email doctype and React's <!--$--> boundary markers, which a feed doesn't want.
       const html = (
@@ -33,7 +40,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/[slug]/f
       )
         .replace(/^<!DOCTYPE[^>]*>/i, "")
         .replace(/<!--\/?\$-->/g, "");
-      const url = postUrl(slug, post.slug);
+      const url = postUrl(slug, post.slug, liveDomain(publication));
       return [
         "<item>",
         `<title>${escapeXml(post.title)}</title>`,
@@ -47,7 +54,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/[slug]/f
     }),
   );
 
-  const home = publicationUrl(slug);
+  const home = publicationUrl(slug, liveDomain(publication));
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">',

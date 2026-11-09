@@ -2,14 +2,17 @@ import { asc, eq } from "drizzle-orm";
 import Papa from "papaparse";
 import { db } from "@/db";
 import { subscribers } from "@/db/schema";
-import { getPublicationForUser, getSession } from "@/lib/dal";
+import { getMembership, getSession, hasRole } from "@/lib/dal";
 import { subscriberState } from "@/lib/subscribers";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
-  const publication = await getPublicationForUser(session.user.id);
-  if (!publication) return new Response("Not found", { status: 404 });
+  const membership = await getMembership(session.user.id);
+  if (!membership || !hasRole(membership.role, "editor")) {
+    return new Response("Not found", { status: 404 });
+  }
+  const { publication } = membership;
 
   const rows = await db
     .select({

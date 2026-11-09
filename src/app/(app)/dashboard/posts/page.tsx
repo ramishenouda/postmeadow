@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { db } from "@/db";
@@ -19,9 +19,14 @@ export default function PostsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Posts</h1>
           <p className="text-muted-foreground text-sm">Drafts and everything you&apos;ve sent.</p>
         </div>
-        <Link href="/dashboard/posts/new" className={buttonVariants()}>
-          New post
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/posts/import" className={buttonVariants({ variant: "outline" })}>
+            Import
+          </Link>
+          <Link href="/dashboard/posts/new" className={buttonVariants()}>
+            New post
+          </Link>
+        </div>
       </div>
       <Suspense fallback={<div className="bg-muted h-64 animate-pulse rounded-xl" />}>
         <PostList />
@@ -45,7 +50,10 @@ async function PostList() {
       opened: sql<number>`(select count(d.opened_at)::int from ${deliveries} d where d.post_id = posts.id)`,
     })
     .from(posts)
-    .where(eq(posts.publicationId, publication.id))
+    // Resends to non-openers are shown on their original post's page.
+    .where(
+      and(eq(posts.publicationId, publication.id), isNull(posts.resendOf), eq(posts.kind, "issue")),
+    )
     // Drafts, then scheduled (soonest first), then sent (newest first).
     .orderBy(
       sql`case ${posts.status} when 'draft' then 0 when 'scheduled' then 1 else 2 end`,

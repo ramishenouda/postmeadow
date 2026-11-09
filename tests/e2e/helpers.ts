@@ -125,12 +125,17 @@ export class Client {
     file: string,
     name: string,
     fields: Record<string, string | Blob>,
-    { leadingArgs = [], prev = {} }: { leadingArgs?: unknown[]; prev?: unknown } = {},
+    {
+      leadingArgs = [],
+      prev = {},
+      withPrev = true,
+    }: { leadingArgs?: unknown[]; prev?: unknown; withPrev?: boolean } = {},
   ) {
     const body = new FormData();
     // React reads the referenced FormData entries when it resolves the root, so they go first.
     for (const [key, value] of Object.entries(fields)) body.append(`_1_${key}`, value);
-    body.append("0", JSON.stringify([...leadingArgs, prev, "$K1"]));
+    // withPrev: false for a plain <form action={fn.bind(null, …)}> (no previous state).
+    body.append("0", JSON.stringify([...leadingArgs, ...(withPrev ? [prev] : []), "$K1"]));
     const res = await this.fetch(page, {
       method: "POST",
       headers: { "next-action": actionId(file, name), accept: "text/x-component" },

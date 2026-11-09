@@ -1,11 +1,12 @@
 import "server-only";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { posts, publications, subscribers } from "@/db/schema";
+import { landingPages, posts, publications, subscribers, tags, user } from "@/db/schema";
 import { publicationTag } from "@/lib/cache-tags";
 import { firstImage, markdownExcerpt, readingMinutes } from "@/lib/markdown/excerpt";
 import { parseMarkdown } from "@/lib/markdown/parse";
+import { previewMarkdown } from "@/lib/paid-preview";
 
 /**
  * Cached reads for public pages. Invalidate with publicationTag(slug) whenever a
@@ -31,6 +32,18 @@ export async function getPublicPublication(slug: string) {
       logoUrl: publications.logoUrl,
       accentColor: publications.accentColor,
       fontStyle: publications.fontStyle,
+      popupHeadline: publications.popupHeadline,
+      popupDelaySeconds: publications.popupDelaySeconds,
+      customDomain: publications.customDomain,
+      customDomainVerifiedAt: publications.customDomainVerifiedAt,
+      paidEnabled: publications.paidEnabled,
+      paidCurrency: publications.paidCurrency,
+      paidMonthlyCents: publications.paidMonthlyCents,
+      paidYearlyCents: publications.paidYearlyCents,
+      paidDescription: publications.paidDescription,
+      acceptsPayments: sql<boolean>`(${publications.paidEnabled} and ${publications.stripeChargesEnabled}
+        and ${publications.stripeAccountId} is not null
+        and (${publications.paidMonthlyPriceId} is not null or ${publications.paidYearlyPriceId} is not null))`,
     })
     .from(publications)
     .where(eq(publications.slug, slug))
@@ -54,18 +67,21 @@ export async function getPublishedPosts(slug: string) {
       slug: posts.slug,
       content: posts.content,
       publishedAt: posts.publishedAt,
+      paid: posts.paid,
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
     .where(and(eq(publications.slug, slug), eq(posts.status, "sent"), eq(posts.webHidden, false)))
     .orderBy(desc(posts.publishedAt));
   return rows.map(({ content, ...post }) => {
-    const root = parseMarkdown(content);
+    // Paid posts: excerpts and thumbnails come from the free beginning only.
+    const full = parseMarkdown(content);
+    const root = post.paid ? parseMarkdown(previewMarkdown(content).preview) : full;
     return {
       ...post,
       excerpt: post.subtitle ? "" : markdownExcerpt(root, 180),
       image: firstImage(root),
-      minutes: readingMinutes(root),
+      minutes: readingMinutes(full),
     };
   });
 }
@@ -96,6 +112,7 @@ export async function getFeedPosts(slug: string, limit = 20) {
       slug: posts.slug,
       content: posts.content,
       publishedAt: posts.publishedAt,
+      paid: posts.paid,
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
@@ -116,9 +133,13 @@ export async function getPublishedPost(slug: string, postSlug: string) {
       content: posts.content,
       contentFormat: posts.contentFormat,
       publishedAt: posts.publishedAt,
+      sponsor: posts.sponsor,
+      author: user.name,
+      paid: posts.paid,
     })
     .from(posts)
     .innerJoin(publications, eq(posts.publicationId, publications.id))
+    .leftJoin(user, eq(user.id, posts.authorId))
     .where(
       and(
         eq(publications.slug, slug),
@@ -129,4 +150,24 @@ export async function getPublishedPost(slug: string, postSlug: string) {
     )
     .limit(1);
   return post ?? null;
+}
+
+/** A campaign landing page (/{slug}/l/{page}) with the tag its sign-ups get. */
+export async function getLandingPage(slug: string, page: string) {
+  "use cache";
+  cacheTag(publicationTag(slug));
+  cacheLife("minutes");
+  const [row] = await db
+    .select({
+      headline: landingPages.headline,
+      body: landingPages.body,
+      buttonText: landingPages.buttonText,
+      tag: tags.name,
+    })
+    .from(landingPages)
+    .innerJoin(publications, eq(publications.id, landingPages.publicationId))
+    .leftJoin(tags, eq(tags.id, landingPages.tagId))
+    .where(and(eq(publications.slug, slug), eq(landingPages.slug, page)))
+    .limit(1);
+  return row ?? null;
 }

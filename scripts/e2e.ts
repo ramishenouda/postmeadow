@@ -64,6 +64,10 @@ const serverEnv: NodeJS.ProcessEnv = {
   STRIPE_WEBHOOK_SECRET,
   STRIPE_API_BASE: "http://localhost:12111",
   ADMIN_EMAILS: "admin@example.com",
+  // The feed-import test serves its feed from localhost, which is refused otherwise.
+  IMPORT_ALLOW_PRIVATE_FEEDS: "1",
+  // Custom domains can't have real DNS in tests; accept them when checked.
+  CUSTOM_DOMAIN_SKIP_DNS: "1",
 };
 
 function run(cmd: string, cmdArgs: string[], env = process.env) {
@@ -119,6 +123,8 @@ async function main() {
       "STRIPE_API_BASE",
       "SCHEDULER_INTERVAL_MS",
       "ADMIN_EMAILS",
+      "IMPORT_ALLOW_PRIVATE_FEEDS",
+      "CUSTOM_DOMAIN_SKIP_DNS",
     ];
     const lines = keys.map((k) => `${k}=${serverEnv[k]}`);
     lines.push("BETTER_AUTH_SECRET=e2e-only-auth-secret-0123456789abcdef", "PORT=3100");

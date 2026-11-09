@@ -145,6 +145,32 @@ a minute while Caddy gets the certificate. Open https://postmeadow.com.
    invoices.
 5. `docker compose up -d`, then buy Pro with a real card and refund yourself to check.
 
+### Paid newsletters (Stripe Connect)
+
+Writers sell subscriptions to their readers through **Stripe Connect** (Express accounts);
+each payment goes to the writer's account minus our fee (10% Free, 5% Pro, 3% Business, in
+`src/lib/fees.ts`).
+
+1. Stripe → Connect → get started, choose **Express** accounts, fill in the platform profile
+   and branding.
+2. In the webhook from step 3 above, also tick **Listen to events on Connected accounts** →
+   `account.updated` (or add a second endpoint for it with the same URL; then both secrets
+   must match, so one endpoint is simpler).
+3. Readers manage their subscription through the same customer portal (step 4).
+
+## 9. Publications' own domains
+
+Writers on Pro and Business can put their publication on their own domain
+(`news.brand.com`) and send from their own address.
+
+- **Web:** they add a CNAME to `CUSTOM_DOMAIN_TARGET` (or the site's host). Create that
+  name once: e.g. `domains.postmeadow.com` → A record to this server. The Caddyfile's
+  `https://` block gets each verified domain a certificate on demand (it asks
+  `/api/domains/check` first, so only verified domains get one). Ports 80 and 443 must stay
+  open for that.
+- **Sending:** uses Resend's Domains API with the same `RESEND_API_KEY`, which must have
+  **full access** (not "sending only"). Writers add the records shown in Settings.
+
 ---
 
 ## Day to day

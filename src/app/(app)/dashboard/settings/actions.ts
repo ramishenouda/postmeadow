@@ -30,7 +30,7 @@ export async function updateSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const { user, publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const raw = {
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? ""),
@@ -59,7 +59,7 @@ export async function updateSettings(
   if (!isEmailDesign(raw.emailDesign)) {
     return { errors: { emailDesign: "Pick one of the designs." }, values: raw };
   }
-  if (parsed.data.logoUrl && !(await ownsImageUrl(user.id, parsed.data.logoUrl))) {
+  if (parsed.data.logoUrl && !(await ownsImageUrl(publication.ownerId, parsed.data.logoUrl))) {
     return {
       errors: { logoUrl: "Upload the logo here; links to other sites can't be used." },
       values: raw,
@@ -72,6 +72,10 @@ export async function updateSettings(
       ...parsed.data,
       welcomeEnabled: raw.welcomeEnabled === "on",
       welcomeMessage: welcomeMessage || null,
+      // The checkbox is only judged when the form had it (older forms keep the setting).
+      commentsEnabled: formData.has("commentsShown")
+        ? formData.get("commentsEnabled") === "on"
+        : publication.commentsEnabled,
       emailDesign: raw.emailDesign,
     })
     .where(eq(publications.id, publication.id));
@@ -83,9 +87,9 @@ export async function updateSettings(
 export type DeleteImageResult = { ok: true } | { ok: false; error: string };
 
 export async function deleteUploadedImage(imageId: string): Promise<DeleteImageResult> {
-  const { user } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   try {
-    await deleteImage(user.id, imageId);
+    await deleteImage(publication.ownerId, imageId);
   } catch (error) {
     if (error instanceof ImageError) return { ok: false, error: error.message };
     throw error;
@@ -99,7 +103,7 @@ export async function deleteUploadedImage(imageId: string): Promise<DeleteImageR
  * publication's web address, so it can't happen by a stray click.
  */
 export async function deleteMyAccount(confirmation: string): Promise<{ ok: false; error: string }> {
-  const { user, publication } = await requirePublication();
+  const { user, publication } = await requirePublication("owner");
   if (confirmation.trim().toLowerCase() !== publication.slug) {
     return { ok: false, error: `Type ${publication.slug} to confirm.` };
   }

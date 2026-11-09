@@ -6,6 +6,9 @@ import { renderEmail } from "@/lib/email/render";
 import { parseMarkdown } from "@/lib/markdown/parse";
 import { renderMarkdownTree, splitHero } from "@/lib/markdown/render";
 import { markdownExcerpt } from "@/lib/markdown/excerpt";
+import { SponsorBlock } from "@/emails/components/sponsor-block";
+import { DEFAULT_ACCENT } from "@/lib/color";
+import { readSponsor } from "@/lib/sponsor";
 import type { EmailRenderer } from "./types";
 
 export const markdownRenderer: EmailRenderer = {
@@ -19,6 +22,10 @@ export const markdownRenderer: EmailRenderer = {
     const { hero, rest } = EMAIL_DESIGNS[design].hero
       ? splitHero(tree)
       : { hero: null, rest: tree };
+    const sponsor = readSponsor(post.sponsor);
+    const sponsorBlock = sponsor ? (
+      <SponsorBlock sponsor={sponsor} design={design} accent={accent ?? DEFAULT_ACCENT} />
+    ) : null;
     return renderEmail(
       <NewsletterEmail
         design={design}
@@ -31,10 +38,13 @@ export const markdownRenderer: EmailRenderer = {
         unsubscribeUrl={urls.unsubscribe}
         senderName={publication.fromName ?? undefined}
         postalAddress={publication.postalAddress}
+        referUrl={publication.referralsEnabled ? `${urls.unsubscribe}#refer` : null}
         brand={{ logoUrl: publication.logoUrl, fontStyle: publication.fontStyle, accent }}
         hero={hero}
       >
+        {sponsor?.position === "top" ? sponsorBlock : null}
         {renderMarkdownTree(rest, createEmailMarkdownComponents({ accent, design }))}
+        {sponsor?.position === "bottom" ? sponsorBlock : null}
       </NewsletterEmail>,
     );
   },

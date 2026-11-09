@@ -1,10 +1,11 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { publications } from "@/db/schema";
+import { posts, publications } from "@/db/schema";
 import { hit, RateLimitError } from "@/lib/rate-limit";
 import { emailSchema, requestSubscription } from "@/lib/subscribers";
 import { reportError } from "@/lib/report";
+import { findReferrer } from "@/lib/referrals";
 
 /** Per visitor: generous for a shared office/home IP, useless for a bot. */
 const PER_IP = { limit: 10, windowSeconds: 10 * 60 };
@@ -29,6 +30,10 @@ export async function handleSubscribeRequest(input: {
   honeypot: string;
   /** Names of existing tags to give the new sign-up (unknown names are ignored). */
   tags?: string[];
+  /** The post page the form was on. */
+  postSlug?: string;
+  /** A reader's referral code (?ref=…). */
+  ref?: string;
   ip: string;
 }): Promise<SubscribeResult> {
   // Honeypot: real people never fill in this hidden field. Pretend it worked.
@@ -54,7 +59,11 @@ export async function handleSubscribeRequest(input: {
   }
 
   const [publication] = await db
-    .select({ id: publications.id, name: publications.name })
+    .select({
+      id: publications.id,
+      name: publications.name,
+      referralsEnabled: publications.referralsEnabled,
+    })
     .from(publications)
     .where(eq(publications.slug, input.slug))
     .limit(1);
@@ -66,8 +75,24 @@ export async function handleSubscribeRequest(input: {
     };
   }
 
+  let signupPostId: string | null = null;
+  if (input.postSlug) {
+    const [post] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(and(eq(posts.publicationId, publication.id), eq(posts.slug, input.postSlug)))
+      .limit(1);
+    signupPostId = post?.id ?? null;
+  }
+
+  const referrer = await findReferrer(publication.id, input.ref);
+  const referrerId = referrer && referrer.email !== parsed.data ? referrer.id : null;
+
   try {
-    await requestSubscription(publication, parsed.data, input.tags ?? []);
+    await requestSubscription(publication, parsed.data, input.tags ?? [], {
+      signupPostId,
+      referrerId,
+    });
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { status: "error", code: "paused", message: error.message, email: input.email };

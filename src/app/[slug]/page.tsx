@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { Brand, Logo, Monogram } from "@/components/brand";
 import { formatDate } from "@/lib/format";
 import { getPublicPublication, getPublishedPosts, getReaderCount } from "@/lib/public-data";
+import { getPublicTopics } from "@/lib/topics";
 import { SubscribeForm } from "./subscribe-form";
 
 export async function generateMetadata({ params }: PageProps<"/[slug]">): Promise<Metadata> {
@@ -33,9 +34,10 @@ async function Publication({ params }: Pick<PageProps<"/[slug]">, "params">) {
   const { slug } = await params;
   const publication = await getPublicPublication(slug);
   if (!publication) notFound();
-  const [posts, readers] = await Promise.all([
+  const [posts, readers, topics] = await Promise.all([
     getPublishedPosts(slug),
     getReaderCount(publication.id),
+    getPublicTopics(slug),
   ]);
 
   return (
@@ -58,11 +60,21 @@ async function Publication({ params }: Pick<PageProps<"/[slug]">, "params">) {
             </p>
           ) : null}
           <div className="mx-auto mt-7 max-w-md text-left">
-            <SubscribeForm slug={publication.slug} />
+            <SubscribeForm slug={publication.slug} topics={topics} />
           </div>
           {readers >= 10 ? (
             <p className="text-muted-foreground mt-3 text-sm">
               Join {readers.toLocaleString("en")} readers
+            </p>
+          ) : null}
+          {publication.acceptsPayments ? (
+            <p className="mt-3 text-sm">
+              <Link
+                href={`/${publication.slug}/upgrade`}
+                className="font-medium text-(--accent) underline"
+              >
+                Become a paid subscriber
+              </Link>
             </p>
           ) : null}
         </header>
@@ -96,6 +108,11 @@ async function Publication({ params }: Pick<PageProps<"/[slug]">, "params">) {
                         </p>
                       ) : null}
                       <p className="text-muted-foreground pt-1 text-xs">
+                        {post.paid ? (
+                          <span className="mr-1.5 rounded-full bg-(--accent) px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            Paid
+                          </span>
+                        ) : null}
                         {formatDate(post.publishedAt)} · {post.minutes} min read
                       </p>
                     </div>

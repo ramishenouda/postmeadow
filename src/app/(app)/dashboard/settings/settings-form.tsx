@@ -24,6 +24,7 @@ type Values = {
   fontStyle: string;
   /** "on" or "" (checkbox semantics, so it round-trips through the form). */
   welcomeEnabled: string;
+  commentsEnabled?: string;
   welcomeMessage: string;
   emailDesign: string;
 };
@@ -91,6 +92,27 @@ export function SettingsForm({ address, values }: { address: string; values: Val
       <Branding initial={v} errors={errors} />
 
       <EmailDesignPicker initial={v.emailDesign} error={errors.emailDesign} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Comments and likes</CardTitle>
+          <CardDescription>
+            Readers can like posts on your page and comment after confirming their email address.
+            You can delete any comment from the post&apos;s page in your dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <input type="hidden" name="commentsShown" value="1" />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="commentsEnabled"
+              defaultChecked={v.commentsEnabled !== ""}
+            />
+            Allow comments on posts
+          </label>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

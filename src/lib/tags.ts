@@ -1,6 +1,7 @@
 import "server-only";
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { enrollOnTags } from "@/lib/automations";
 import { postAudienceTags, posts, subscribers, subscriberTags, tags } from "@/db/schema";
 
 /**
@@ -24,7 +25,7 @@ export function parseTagNames(input: string | string[]): string[] {
   return parts.filter((p) => p && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
 }
 
-export type TagSummary = { id: string; name: string; active: number };
+export type TagSummary = { id: string; name: string; active: number; public: boolean };
 
 /** All tags with how many active subscribers have each. */
 export async function listTags(publicationId: string): Promise<TagSummary[]> {
@@ -32,6 +33,7 @@ export async function listTags(publicationId: string): Promise<TagSummary[]> {
     .select({
       id: tags.id,
       name: tags.name,
+      public: tags.public,
       active: sql<number>`count(${subscribers.id}) filter (where ${subscribers.status} = 'active')::int`,
     })
     .from(tags)
@@ -92,6 +94,8 @@ export async function addTags(subscriberIds: string[], tagIds: string[]) {
       .values(rows.slice(i, i + 5_000))
       .onConflictDoNothing();
   }
+  // Tag-triggered automations (only active subscribers are started).
+  await enrollOnTags(subscriberIds, tagIds);
 }
 
 /** Tags per subscriber, for showing them in the list. */
@@ -125,10 +129,22 @@ export async function postAudience(postId: string) {
     .where(eq(postAudienceTags.postId, postId))
     .orderBy(asc(sql`lower(${tags.name})`));
   return {
-    mode: post?.audience === "tags" ? ("tags" as const) : ("everyone" as const),
+    mode:
+      post?.audience === "tags"
+        ? ("tags" as const)
+        : post?.audience === "paid"
+          ? ("paid" as const)
+          : ("everyone" as const),
     tags: tagRows,
   };
 }
+
+/** Active and not paused by the reader: who a send goes to right now. */
+export const receiving = () =>
+  and(
+    eq(subscribers.status, "active"),
+    or(isNull(subscribers.pausedUntil), lte(subscribers.pausedUntil, sql`now()`)),
+  )!;
 
 /** How many active subscribers a send to these tags (or everyone) would reach. */
 export async function countAudience(publicationId: string, tagIds: string[] | null) {
@@ -136,7 +152,7 @@ export async function countAudience(publicationId: string, tagIds: string[] | nu
     const [{ n }] = await db
       .select({ n: count() })
       .from(subscribers)
-      .where(and(eq(subscribers.publicationId, publicationId), eq(subscribers.status, "active")));
+      .where(and(eq(subscribers.publicationId, publicationId), receiving()));
     return n;
   }
   if (tagIds.length === 0) return 0;
@@ -147,7 +163,7 @@ export async function countAudience(publicationId: string, tagIds: string[] | nu
     .where(
       and(
         eq(subscribers.publicationId, publicationId),
-        eq(subscribers.status, "active"),
+        receiving(),
         inArray(subscriberTags.tagId, tagIds),
       ),
     );

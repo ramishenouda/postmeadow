@@ -35,6 +35,8 @@ export type NewsletterEmailProps = {
   senderName?: string;
   /** The writer's postal address, in every footer (anti-spam laws require one). */
   postalAddress?: string | null;
+  /** The reader's referral page, when the publication runs a referral program. */
+  referUrl?: string | null;
   /** Dateline for Letter and Magazine. */
   date?: Date;
   /**
@@ -64,7 +66,10 @@ type Shared = Required<
     "publicationName" | "publicationUrl" | "title" | "webUrl" | "unsubscribeUrl"
   >
 > &
-  Pick<NewsletterEmailProps, "subtitle" | "senderName" | "postalAddress" | "children"> & {
+  Pick<
+    NewsletterEmailProps,
+    "subtitle" | "senderName" | "postalAddress" | "referUrl" | "children"
+  > & {
     logoUrl: string | null;
     accent: string;
     date: Date;
@@ -153,6 +158,7 @@ type FooterProps = {
   unsubscribeUrl: string;
   webUrl: string;
   postalAddress?: string | null;
+  referUrl?: string | null;
   align?: CSSProperties["textAlign"];
   withWebLink?: boolean;
   linkColor?: string;
@@ -164,6 +170,7 @@ function Footer({
   unsubscribeUrl,
   webUrl,
   postalAddress,
+  referUrl,
   align = "left",
   withWebLink = false,
   linkColor = ink.muted,
@@ -183,6 +190,18 @@ function Footer({
             {" · "}
           </>
         ) : null}
+        {referUrl ? (
+          <>
+            <Link href={referUrl} style={link}>
+              Refer a friend
+            </Link>
+            {" · "}
+          </>
+        ) : null}
+        <Link href={unsubscribeUrl} style={link}>
+          Pause or pick topics
+        </Link>
+        {" · "}
         <Link href={unsubscribeUrl} style={link}>
           Unsubscribe
         </Link>

@@ -120,10 +120,13 @@ export function batchTransport() {
   };
 }
 
-/** `"Publication Name" <address from EMAIL_FROM>`. The address must be on your verified domain. */
-export function fromWithName(name: string): string {
+/**
+ * `"Publication Name" <address>`: the writer's own verified address if given
+ * (src/lib/email/sender-domains.ts), else the one in EMAIL_FROM.
+ */
+export function fromWithName(name: string, ownAddress?: string | null): string {
   const match = env.EMAIL_FROM.match(/<([^>]+)>/);
-  const address = (match ? match[1] : env.EMAIL_FROM).trim();
+  const address = (ownAddress || (match ? match[1] : env.EMAIL_FROM)).trim();
   const safeName = name.replace(/[\r\n]+/g, " ").replace(/["\\]/g, "\\$&");
   return `"${safeName}" <${address}>`;
 }

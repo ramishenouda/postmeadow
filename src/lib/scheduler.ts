@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { posts, publications, rateLimits } from "@/db/schema";
 import { env } from "@/env";
 import { notifyUser } from "@/lib/notify";
-import { isSendRunning, processDeliveries, queuePost } from "@/lib/sending";
+import { decideAbTest, isSendRunning, processDeliveries, queuePost } from "@/lib/sending";
 import { absoluteUrl } from "@/lib/urls";
+import { runAutomations } from "@/lib/automations";
 import { reportError } from "@/lib/report";
 
 /**
@@ -69,7 +70,29 @@ export async function tick() {
     void processDeliveries(post.id).catch((e) => reportError("scheduled send failed", e));
   }
 
-  // Sends that were interrupted (e.g. by a restart) and aren't running here.
+  const automated = await runAutomations();
+  if (automated) console.log(`scheduler: sent ${automated} automation emails`);
+
+  // A/B tests whose wait is over: pick the winner and send it to everyone else.
+  const decided = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(
+      and(
+        eq(posts.status, "sending"),
+        isNotNull(posts.abMetric),
+        isNull(posts.abWinner),
+        lte(posts.abDecideAt, new Date()),
+      ),
+    )
+    .limit(20);
+  for (const post of decided) {
+    const winner = await decideAbTest(post.id);
+    if (winner) console.log(`scheduler: A/B test ${post.id} won by ${winner.toUpperCase()}`);
+  }
+
+  // Sends that were interrupted (e.g. by a restart) and aren't running here,
+  // and A/B tests just released to everyone.
   const sending = await db
     .select({ id: posts.id })
     .from(posts)

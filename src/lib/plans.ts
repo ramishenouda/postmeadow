@@ -14,6 +14,8 @@ export const PLANS = {
     subscribers: 1_000,
     emailsPerMonth: 10_000,
     invitesPerDay: 100,
+    teammates: 1,
+    customDomains: false,
     tagline: "Everything you need to start.",
   },
   pro: {
@@ -22,6 +24,8 @@ export const PLANS = {
     subscribers: 10_000,
     emailsPerMonth: 100_000,
     invitesPerDay: 1_000,
+    teammates: 5,
+    customDomains: true,
     tagline: "For writers with a growing list.",
   },
   business: {
@@ -30,11 +34,19 @@ export const PLANS = {
     subscribers: 50_000,
     emailsPerMonth: 500_000,
     invitesPerDay: 5_000,
+    teammates: 25,
+    customDomains: true,
     tagline: "For teams and image-heavy newsletters.",
   },
 } as const;
 
 const planOf = (plan: string) => (isPlanId(plan) ? PLANS[plan] : PLANS.free);
+
+/** Own web address and sending domain: paid plans. */
+export const allowsCustomDomains = (plan: string) => planOf(plan).customDomains;
+
+/** People besides the owner who can work on the publication. */
+export const teammateLimit = (plan: string) => planOf(plan).teammates;
 
 /** Invitation emails a publication may send per 24 hours (they go to people who haven't opted in). */
 export const invitesPerDay = (plan: string) => planOf(plan).invitesPerDay;

@@ -4,6 +4,10 @@ import { env } from "@/env";
 import { requirePublication } from "@/lib/dal";
 import { listImages, storageUsage } from "@/lib/images/service";
 import { DeleteAccount } from "./delete-account";
+import { DomainsSection } from "./domains-section";
+import { getBilling } from "@/lib/billing/service";
+import { domainTarget } from "@/lib/domains";
+import { allowsCustomDomains } from "@/lib/plans";
 import { EmbedSnippets } from "./embed-snippets";
 import { SettingsForm } from "./settings-form";
 import { StorageSection } from "./storage-section";
@@ -29,24 +33,46 @@ export default function SettingsPage() {
         <Embed />
       </Suspense>
       <Suspense fallback={null}>
+        <Domains />
+      </Suspense>
+      <Suspense fallback={null}>
         <Danger />
       </Suspense>
     </div>
   );
 }
 
+async function Domains() {
+  const { publication } = await requirePublication("editor");
+  const billing = await getBilling(publication.ownerId);
+  return (
+    <DomainsSection
+      allowed={allowsCustomDomains(billing?.plan ?? "free")}
+      target={domainTarget()}
+      customDomain={publication.customDomain}
+      verified={Boolean(publication.customDomainVerifiedAt)}
+      senderEmail={publication.senderEmail}
+      senderStatus={publication.senderDomainStatus}
+      senderRecords={publication.senderDomainRecords ?? []}
+      defaultFrom={(env.EMAIL_FROM.match(/<([^>]+)>/)?.[1] ?? env.EMAIL_FROM).trim()}
+    />
+  );
+}
+
 async function Danger() {
-  const { publication } = await requirePublication();
+  const { publication, role } = await requirePublication("editor");
+  // Only the owner can delete the publication (with their account).
+  if (role !== "owner") return null;
   return <DeleteAccount slug={publication.slug} />;
 }
 
 async function Embed() {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   return <EmbedSnippets origin={new URL(env.APP_URL).origin} slug={publication.slug} />;
 }
 
 async function Settings() {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   return (
     <SettingsForm
       address={`${new URL(env.APP_URL).host}/${publication.slug}`}
@@ -60,6 +86,7 @@ async function Settings() {
         accentColor: publication.accentColor ?? "",
         fontStyle: publication.fontStyle,
         welcomeEnabled: publication.welcomeEnabled ? "on" : "",
+        commentsEnabled: publication.commentsEnabled ? "on" : "",
         welcomeMessage: publication.welcomeMessage ?? "",
         emailDesign: publication.emailDesign,
       }}
@@ -68,7 +95,11 @@ async function Settings() {
 }
 
 async function Storage() {
-  const { user } = await requirePublication();
-  const [usage, uploaded] = await Promise.all([storageUsage(user.id), listImages(user.id)]);
+  // Images count toward the publication owner's storage, whoever uploaded them.
+  const { publication } = await requirePublication("editor");
+  const [usage, uploaded] = await Promise.all([
+    storageUsage(publication.ownerId),
+    listImages(publication.ownerId),
+  ]);
   return <StorageSection usage={usage} images={uploaded} />;
 }

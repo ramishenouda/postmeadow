@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Globe, X } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import {
   AlertDialog,
@@ -26,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { SubscriberFilter } from "@/lib/subscriber-filters";
-import { deleteTag, setSubscriberTags, tagMatching } from "./actions";
+import { deleteTag, setSubscriberTags, setTagPublic, tagMatching } from "./actions";
 
 /** Edit one subscriber's tags as a comma-separated list, with suggestions. */
 export function EditTags({
@@ -217,5 +217,39 @@ export function DeleteTagButton({ id, name, count }: { id: string; name: string;
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/** Toggle whether readers can pick this tag as a topic themselves. */
+export function TopicToggle({
+  id,
+  name,
+  isPublic,
+}: {
+  id: string;
+  name: string;
+  isPublic: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      aria-pressed={isPublic}
+      disabled={pending}
+      title={
+        isPublic
+          ? "A public topic: readers can pick it when subscribing and on their preferences page. Click to make it private."
+          : "Private. Click to let readers pick it as a topic."
+      }
+      aria-label={`${name}: ${isPublic ? "public topic" : "private tag"}`}
+      onClick={() => startTransition(async () => void (await setTagPublic(id, !isPublic)))}
+      className={
+        isPublic
+          ? "text-primary rounded-full p-0.5"
+          : "text-muted-foreground/50 hover:text-foreground rounded-full p-0.5"
+      }
+    >
+      <Globe className="size-3" aria-hidden />
+    </button>
   );
 }

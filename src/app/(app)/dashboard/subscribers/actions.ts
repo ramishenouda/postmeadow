@@ -1,7 +1,8 @@
 "use server";
 
 import { and, eq, inArray } from "drizzle-orm";
-import { refresh } from "next/cache";
+import { refresh, updateTag } from "next/cache";
+import { publicationTag } from "@/lib/cache-tags";
 import { after } from "next/server";
 import Papa from "papaparse";
 import { db } from "@/db";
@@ -9,7 +10,11 @@ import { subscribers, subscriberTags, tags } from "@/db/schema";
 import { requirePublication } from "@/lib/dal";
 import { canRemove, emailSchema } from "@/lib/subscribers";
 import { createInvitations, inviteOne, sendInvitations } from "@/lib/invitations";
-import { subscriberFilterWhere, type SubscriberFilter } from "@/lib/subscriber-filters";
+import {
+  parseSubscriberFilter,
+  subscriberFilterWhere,
+  type SubscriberFilter,
+} from "@/lib/subscriber-filters";
 import { addTags, findOrCreateTags, parseTagNames, TagError } from "@/lib/tags";
 import { randomToken } from "@/lib/tokens";
 import { reportError } from "@/lib/report";
@@ -24,7 +29,7 @@ export async function addSubscriber(
   _prev: AddSubscriberState,
   formData: FormData,
 ): Promise<AddSubscriberState> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const raw = String(formData.get("email") ?? "");
   const parsed = emailSchema.safeParse(raw);
   if (!parsed.success) return { error: "Enter a valid email address.", email: raw };
@@ -42,7 +47,7 @@ export async function addSubscriber(
 
 /** Re-send an invitation that expired unanswered. */
 export async function inviteAgain(subscriberId: string): Promise<{ ok: boolean; error?: string }> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const [row] = await db
     .select({ email: subscribers.email })
     .from(subscribers)
@@ -61,7 +66,7 @@ export async function inviteAgain(subscriberId: string): Promise<{ ok: boolean; 
 }
 
 export async function removeSubscriber(subscriberId: string) {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const [row] = await db
     .select({ status: subscribers.status, invitedAt: subscribers.invitedAt })
     .from(subscribers)
@@ -95,7 +100,7 @@ export async function importSubscribers(
   _prev: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const mode = formData.get("mode") === "invite" ? "invited" : "subscribed";
 
   // Adding people as subscribed skips the invitation, so the writer vouches for them.
@@ -237,7 +242,7 @@ export type TagResult = { ok: true } | { ok: false; error: string };
 
 /** Replace one subscriber's tags with these names (new names become new tags). */
 export async function setSubscriberTags(subscriberId: string, names: string): Promise<TagResult> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const [row] = await db
     .select({ id: subscribers.id })
     .from(subscribers)
@@ -260,7 +265,7 @@ export async function setSubscriberTags(subscriberId: string, names: string): Pr
 
 /** Add a tag to everyone the list currently shows (its search and filters). */
 export async function tagMatching(filter: SubscriberFilter, name: string): Promise<TagResult> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const [tagName] = parseTagNames(name);
   if (!tagName) return { ok: false, error: "Enter a tag." };
   try {
@@ -268,7 +273,8 @@ export async function tagMatching(filter: SubscriberFilter, name: string): Promi
     const matching = await db
       .select({ id: subscribers.id })
       .from(subscribers)
-      .where(subscriberFilterWhere(publication.id, filter));
+      // Re-checked: the filter comes from the browser.
+      .where(subscriberFilterWhere(publication.id, parseSubscriberFilter({ ...filter })));
     await addTags(
       matching.map((m) => m.id),
       [tag.id],
@@ -283,8 +289,27 @@ export async function tagMatching(filter: SubscriberFilter, name: string): Promi
 
 /** Delete a tag. Subscribers keep everything else; posts going to it lose it. */
 export async function deleteTag(tagId: string): Promise<TagResult> {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.publicationId, publication.id)));
+  updateTag(publicationTag(publication.slug));
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Make a tag a public topic (readers can pick it on the sign-up form and their
+ * preferences page) or private again.
+ */
+export async function setTagPublic(tagId: string, isPublic: boolean): Promise<TagResult> {
+  const { publication } = await requirePublication("editor");
+  if (!/^[0-9a-f-]{36}$/i.test(tagId)) return { ok: false, error: "Tag not found." };
+  const updated = await db
+    .update(tags)
+    .set({ public: isPublic })
+    .where(and(eq(tags.id, tagId), eq(tags.publicationId, publication.id)))
+    .returning({ id: tags.id });
+  if (updated.length === 0) return { ok: false, error: "Tag not found." };
+  updateTag(publicationTag(publication.slug));
   refresh();
   return { ok: true };
 }

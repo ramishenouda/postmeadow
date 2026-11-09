@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { answerInvitation } from "@/lib/invitations";
 import { sendWelcomeEmail } from "@/lib/welcome";
+import { enrollOnConfirm } from "@/lib/automations";
 import { reportError } from "@/lib/report";
 
 /**
@@ -14,6 +15,9 @@ export async function respondToInvitation(token: string, answer: "accept" | "dec
   const answered = await answerInvitation(token, answer === "accept" ? "accept" : "decline");
   if (answered && answer === "accept") {
     after(() => sendWelcomeEmail(answered.id).catch((e) => reportError("welcome email failed", e)));
+    after(() =>
+      enrollOnConfirm(answered.id).catch((e) => reportError("automation enroll failed", e)),
+    );
   }
   // The page shows the outcome (or why it didn't work, e.g. expired).
   redirect(`/invite/${encodeURIComponent(token)}`);

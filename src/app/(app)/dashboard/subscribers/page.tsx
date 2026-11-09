@@ -19,6 +19,8 @@ import { requirePublication } from "@/lib/dal";
 import { formatDate } from "@/lib/format";
 import { parseSubscriberFilter, subscriberFilterWhere } from "@/lib/subscriber-filters";
 import { listTags, tagsBySubscriber } from "@/lib/tags";
+import { ENGAGEMENT_LABELS } from "@/lib/stats";
+import { hasPaidAccess } from "@/lib/paid";
 import { cn } from "@/lib/utils";
 import { MAX_INVITES } from "@/lib/invitations";
 import {
@@ -30,7 +32,7 @@ import {
 } from "@/lib/subscribers";
 import { AddSubscriberForm } from "./add-subscriber-form";
 import { InviteAgainButton } from "./invite-again-button";
-import { DeleteTagButton, EditTags, TagMatching } from "./tag-controls";
+import { DeleteTagButton, EditTags, TagMatching, TopicToggle } from "./tag-controls";
 import { RemoveSubscriberButton } from "./remove-subscriber-button";
 
 export const metadata: Metadata = { title: "Subscribers" };
@@ -81,10 +83,10 @@ export default function SubscribersPage({ searchParams }: Props) {
 }
 
 async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
-  const { publication } = await requirePublication();
+  const { publication } = await requirePublication("editor");
   const params = await searchParams;
   const filter = parseSubscriberFilter(params);
-  const { q, status, tag } = filter;
+  const { q, status, tag, engagement } = filter;
   const page = Math.max(1, Number.parseInt(String(params.page ?? "1"), 10) || 1);
   const where = subscriberFilterWhere(publication.id, filter);
 
@@ -102,7 +104,7 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
     listTags(publication.id),
     tagsBySubscriber(rows.map((r) => r.id)),
   ]);
-  const filtered = Boolean(q || status || tag);
+  const filtered = Boolean(q || status || tag || engagement);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (p: number) => {
@@ -110,6 +112,7 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
     if (q) next.set("q", q);
     if (status) next.set("status", status);
     if (tag) next.set("tag", tag);
+    if (engagement) next.set("engagement", engagement);
     if (p > 1) next.set("page", String(p));
     const qs = next.toString();
     return `/dashboard/subscribers${qs ? `?${qs}` : ""}`;
@@ -134,6 +137,7 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
         >
           <option value="">All statuses</option>
           <option value="waiting">Awaiting an answer</option>
+          <option value="paid">Paid subscribers</option>
           {SUBSCRIBER_STATES.map((s) => (
             <option key={s} value={s}>
               {STATE_LABELS[s]}
@@ -155,6 +159,14 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
             ))}
           </select>
         ) : null}
+        {engagement ? (
+          <>
+            <input type="hidden" name="engagement" value={engagement} />
+            <span className="bg-muted inline-flex h-9 items-center rounded-lg px-3 text-sm">
+              {ENGAGEMENT_LABELS[engagement].label} readers
+            </span>
+          </>
+        ) : null}
         <Button type="submit" variant="outline" className="h-9">
           Filter
         </Button>
@@ -170,7 +182,12 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
 
       {allTags.length ? (
         <div className="flex flex-wrap items-center gap-1.5 text-sm">
-          <span className="text-muted-foreground mr-1">Tags:</span>
+          <span
+            className="text-muted-foreground mr-1"
+            title="Tags with a globe are public topics readers can choose"
+          >
+            Tags:
+          </span>
           {allTags.map((t) => (
             <span
               key={t.id}
@@ -183,6 +200,7 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
                 {t.name}
               </Link>
               <span className="text-muted-foreground tabular-nums">{t.active}</span>
+              <TopicToggle id={t.id} name={t.name} isPublic={t.public} />
               <DeleteTagButton id={t.id} name={t.name} count={t.active} />
             </span>
           ))}
@@ -250,7 +268,14 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={state} />
+                      <span className="inline-flex items-center gap-1.5">
+                        <StatusBadge status={state} />
+                        {hasPaidAccess(s) ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                            Paid
+                          </span>
+                        ) : null}
+                      </span>
                       {note ? (
                         <p
                           className="text-muted-foreground mt-1 max-w-xs truncate text-xs"
@@ -312,7 +337,12 @@ async function SubscriberList({ searchParams }: Pick<Props, "searchParams">) {
 
 /** The small line under a status: when an invitation expires or expired, or why. */
 function stateNote(
-  s: { statusReason: string | null; confirmSentAt: Date | null; invitedAt: Date | null },
+  s: {
+    statusReason: string | null;
+    confirmSentAt: Date | null;
+    invitedAt: Date | null;
+    pausedUntil: Date | null;
+  },
   state: SubscriberState,
 ): string | null {
   const expiry = expiresAt(s.confirmSentAt);
@@ -326,6 +356,10 @@ function stateNote(
         : null;
     case "declined":
       return "Declined your invitation";
+    case "active":
+      return s.pausedUntil && s.pausedUntil > new Date()
+        ? `Paused until ${formatDate(s.pausedUntil)}`
+        : s.statusReason;
     default:
       return s.statusReason;
   }

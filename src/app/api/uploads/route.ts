@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/dal";
+import { getPublicationForUser, getSession } from "@/lib/dal";
 import { ImageError, MAX_UPLOAD_BYTES } from "@/lib/images/process";
 import { saveImage } from "@/lib/images/service";
 import { hit } from "@/lib/rate-limit";
@@ -29,12 +29,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Choose an image to upload." }, { status: 400 });
   }
 
+  // A teammate's uploads count toward the publication owner's storage.
+  const owner = (await getPublicationForUser(session.user.id))?.ownerId ?? session.user.id;
   try {
-    const image = await saveImage(
-      session.user.id,
-      Buffer.from(await file.arrayBuffer()),
-      file.name || null,
-    );
+    const image = await saveImage(owner, Buffer.from(await file.arrayBuffer()), file.name || null);
     return Response.json(image, { status: 201 });
   } catch (error) {
     if (error instanceof ImageError) {

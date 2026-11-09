@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { publications } from "@/db/schema";
+import { publicationMembers, publications } from "@/db/schema";
 import { auth } from "@/lib/auth";
 
 /**
@@ -28,21 +28,49 @@ export async function requireUser() {
 
 export type CurrentUser = Awaited<ReturnType<typeof requireUser>>;
 
-/** The user's publication (the MVP has one per user), or null. */
-export const getPublicationForUser = cache(async (userId: string) => {
-  const [publication] = await db
+/**
+ * What a user can do on a publication. Owners can do everything; editors everything
+ * but billing and the team; contributors write drafts (an editor sends them).
+ */
+export type Role = "owner" | "editor" | "contributor";
+const RANK: Record<Role, number> = { contributor: 0, editor: 1, owner: 2 };
+export const hasRole = (role: Role, min: Role) => RANK[role] >= RANK[min];
+
+/** The publication the user works on (their own, or the team they joined) and their role. */
+export const getMembership = cache(async (userId: string) => {
+  const [owned] = await db
     .select()
     .from(publications)
     .where(eq(publications.ownerId, userId))
     .orderBy(asc(publications.createdAt))
     .limit(1);
-  return publication ?? null;
+  if (owned) return { publication: owned, role: "owner" as Role };
+  const [member] = await db
+    .select({ publication: publications, role: publicationMembers.role })
+    .from(publicationMembers)
+    .innerJoin(publications, eq(publications.id, publicationMembers.publicationId))
+    .where(eq(publicationMembers.userId, userId))
+    .limit(1);
+  if (!member) return null;
+  return {
+    publication: member.publication,
+    role: (member.role === "editor" ? "editor" : "contributor") as Role,
+  };
 });
 
-/** The signed-in user and their publication. Sends them to onboarding if they have none. */
-export async function requirePublication() {
+/** The user's publication (their own or their team's), or null. */
+export const getPublicationForUser = cache(
+  async (userId: string) => (await getMembership(userId))?.publication ?? null,
+);
+
+/**
+ * The signed-in user, their publication and role. Sends people without one to
+ * onboarding, and people without the `min` role back to the dashboard.
+ */
+export async function requirePublication(min: Role = "contributor") {
   const user = await requireUser();
-  const publication = await getPublicationForUser(user.id);
-  if (!publication) redirect("/onboarding");
-  return { user, publication };
+  const membership = await getMembership(user.id);
+  if (!membership) redirect("/onboarding");
+  if (!hasRole(membership.role, min)) redirect("/dashboard?denied=1");
+  return { user, publication: membership.publication, role: membership.role };
 }

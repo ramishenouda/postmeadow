@@ -1,24 +1,45 @@
 "use server";
 
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { postAudienceTags, posts, postTemplates, tags } from "@/db/schema";
+import {
+  comments,
+  deliveries,
+  postAudienceTags,
+  posts,
+  postTemplates,
+  subscribers,
+  tags,
+} from "@/db/schema";
+import { addAuthorComment } from "@/lib/comments";
 import { publicationTag } from "@/lib/cache-tags";
 import { requirePublication } from "@/lib/dal";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { getOwnedPost } from "@/lib/posts";
-import { processDeliveries, queuePost, sendTestEmail } from "@/lib/sending";
+import {
+  AB_TEST_PERCENTS,
+  AB_WAIT_HOURS,
+  decideAbTest,
+  processDeliveries,
+  queuePost,
+  sendTestEmail,
+} from "@/lib/sending";
+import { sponsorInput, type SponsorInput } from "@/lib/sponsor";
 import { SLUG_PATTERN } from "@/lib/slug";
 import { randomToken } from "@/lib/tokens";
 import { env } from "@/env";
 import { isEmailDesign } from "@/lib/email-designs";
 import { starterContent, starterTemplate } from "@/lib/post-templates";
-import { countAudience } from "@/lib/tags";
+import { countAudience, receiving } from "@/lib/tags";
+import { paidAccessSql } from "@/lib/paid";
 import { reportError } from "@/lib/report";
+
+const EDITORS_ONLY = "Only an editor or the owner can do that. Ask them to send it.";
+const isEditor = (role: string) => role === "owner" || role === "editor";
 
 const untitledSlug = () =>
   `untitled-${randomToken()
@@ -36,7 +57,7 @@ export async function createPost() {
  * publication's saved templates ("saved:<uuid>").
  */
 export async function createPostFrom(source: string) {
-  const { publication } = await requirePublication();
+  const { user, publication } = await requirePublication();
   let start = {
     title: "",
     subtitle: null as string | null,
@@ -78,7 +99,7 @@ export async function createPostFrom(source: string) {
 
   const [post] = await db
     .insert(posts)
-    .values({ publicationId: publication.id, slug: untitledSlug(), ...start })
+    .values({ publicationId: publication.id, slug: untitledSlug(), authorId: user.id, ...start })
     .returning({ id: posts.id });
   redirect(`/dashboard/posts/${post.id}`);
 }
@@ -119,10 +140,14 @@ export async function saveAsTemplate(postId: string, name: string): Promise<Acti
  */
 export async function setPostAudience(
   postId: string,
-  mode: "everyone" | "tags",
+  mode: "everyone" | "tags" | "paid",
   tagIds: string[],
 ): Promise<{ ok: true; recipients: number } | { ok: false; error: string }> {
+  if (mode !== "everyone" && mode !== "tags" && mode !== "paid") {
+    return { ok: false, error: "Pick who it goes to." };
+  }
   const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
   if (!owned) return { ok: false, error: "Post not found." };
   if (owned.post.status !== "draft" && owned.post.status !== "scheduled") {
     return { ok: false, error: "This post has already been sent." };
@@ -155,7 +180,35 @@ export async function setPostAudience(
   });
   return {
     ok: true,
-    recipients: await countAudience(publicationId, mode === "tags" ? valid : null),
+    recipients:
+      mode === "paid"
+        ? await countPaid(publicationId)
+        : await countAudience(publicationId, mode === "tags" ? valid : null),
+  };
+}
+
+/** Paying, active and not paused subscribers. */
+async function countPaid(publicationId: string) {
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(subscribers)
+    .where(and(eq(subscribers.publicationId, publicationId), receiving(), paidAccessSql));
+  return n;
+}
+
+/** Make a post paid (free readers get a preview) or free. Before sending only. */
+export async function setPostPaid(postId: string, paid: boolean): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  if (owned.post.status !== "draft" && owned.post.status !== "scheduled") {
+    return { ok: false, error: "This post has already been sent." };
+  }
+  await db.update(posts).set({ paid }).where(eq(posts.id, owned.post.id));
+  return {
+    ok: true,
+    message: paid
+      ? "Paid post: free readers get the beginning and an upgrade button."
+      : "Free post: everyone gets all of it.",
   };
 }
 
@@ -212,6 +265,7 @@ export async function savePost(postId: string, input: PostInput): Promise<SaveRe
   if (post.status === "sending") {
     return { ok: false, error: "This post is being sent; edit it once sending finishes." };
   }
+  if (post.status === "sent" && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
 
   const parsed = postInput.safeParse(input);
   if (!parsed.success) {
@@ -249,7 +303,7 @@ export async function savePost(postId: string, input: PostInput): Promise<SaveRe
 
 export async function deletePost(postId: string) {
   const owned = await getOwnedPost(postId);
-  if (owned?.post.status === "draft") {
+  if (owned?.post.status === "draft" && owned.post.kind === "issue") {
     await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.status, "draft")));
   }
   redirect("/dashboard/posts");
@@ -270,7 +324,13 @@ export async function sendTest(postId: string): Promise<ActionResult> {
   return { ok: true, message: `Test sent to ${owned.user.email}` };
 }
 
-function notReadyToSend(post: { title: string; content: string; slug: string }): string | null {
+function notReadyToSend(post: {
+  title: string;
+  content: string;
+  slug: string;
+  kind: string;
+}): string | null {
+  if (post.kind !== "issue") return "Automation emails are sent by their automation.";
   if (!post.title.trim()) return "Add a title before sending.";
   if (!post.content.trim()) return "Write something before sending.";
   if (post.slug.startsWith("untitled-")) return "Set the post URL before sending.";
@@ -284,13 +344,20 @@ const MAX_SCHEDULE_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
  * Schedule (or reschedule) a post. The scheduler sends it at `at` to everyone who's
  * subscribed by then, and publishes it on the web. Scheduled posts stay editable.
  */
-export async function schedulePost(postId: string, at: string): Promise<ActionResult> {
+export async function schedulePost(
+  postId: string,
+  at: string,
+  ab: AbTestInput | null = null,
+): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
   if (!owned) return { ok: false, error: "Post not found." };
   const { post } = owned;
   if (post.status !== "draft" && post.status !== "scheduled") {
     return { ok: false, error: "This post has already been sent." };
   }
+  const abError = await saveAbTest(post.id, ab);
+  if (abError) return { ok: false, error: abError };
   const blocker = notReadyToSend(post);
   if (blocker) return { ok: false, error: blocker.replace("sending", "scheduling") };
   // Problems that would stop it at send time anyway (limits are checked then too).
@@ -320,6 +387,7 @@ export async function schedulePost(postId: string, at: string): Promise<ActionRe
 
 export async function unschedulePost(postId: string): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
   if (!owned || owned.post.status !== "scheduled") {
     return { ok: false, error: "This post isn't scheduled." };
   }
@@ -334,6 +402,7 @@ export async function unschedulePost(postId: string): Promise<ActionResult> {
 /** Take a sent post off the web (archive, post page, feed, sitemap), or put it back. */
 export async function setWebHidden(postId: string, hidden: boolean): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
   if (!owned || owned.post.status !== "sent") return { ok: false, error: "Post not found." };
   await db
     .update(posts)
@@ -344,8 +413,12 @@ export async function setWebHidden(postId: string, hidden: boolean): Promise<Act
   return { ok: true, message: hidden ? "Removed from the web." : "Published on the web again." };
 }
 
-export async function sendPost(postId: string): Promise<ActionResult> {
+export async function sendPost(
+  postId: string,
+  ab: AbTestInput | null = null,
+): Promise<ActionResult> {
   const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
   if (!owned) return { ok: false, error: "Post not found." };
   const { post, publication } = owned;
   if (post.status !== "draft" && post.status !== "scheduled") {
@@ -353,6 +426,8 @@ export async function sendPost(postId: string): Promise<ActionResult> {
   }
   const blocker = notReadyToSend(post);
   if (blocker) return { ok: false, error: blocker };
+  const abError = await saveAbTest(post.id, ab);
+  if (abError) return { ok: false, error: abError };
 
   // Suspension, postal address, audience and plan limits are all checked in queuePost.
   const result = await queuePost(post.id, publication.id);
@@ -364,7 +439,150 @@ export async function sendPost(postId: string): Promise<ActionResult> {
     processDeliveries(post.id).catch((e) => reportError("send failed", e, { postId: post.id })),
   );
   refresh();
-  return { ok: true, message: `Sending to ${result.queued.toLocaleString("en")} subscribers…` };
+  return {
+    ok: true,
+    message: ab
+      ? `A/B test started: ${result.queued.toLocaleString("en")} subscribers in total.`
+      : `Sending to ${result.queued.toLocaleString("en")} subscribers…`,
+  };
+}
+
+const abTestInput = z.object({
+  subjectB: z.string().trim().min(1, "Write the second subject line.").max(200),
+  metric: z.enum(["opens", "clicks"]),
+  percent: z.number().refine((n) => (AB_TEST_PERCENTS as readonly number[]).includes(n)),
+  waitHours: z.number().refine((n) => (AB_WAIT_HOURS as readonly number[]).includes(n)),
+});
+
+export type AbTestInput = z.input<typeof abTestInput>;
+
+/** Stores (or clears, with null) a post's A/B subject test. Returns an error message. */
+async function saveAbTest(postId: string, ab: AbTestInput | null): Promise<string | null> {
+  if (ab === null) {
+    await db.update(posts).set({ abMetric: null }).where(eq(posts.id, postId));
+    return null;
+  }
+  const parsed = abTestInput.safeParse(ab);
+  if (!parsed.success) return parsed.error.issues[0]?.message ?? "Check the A/B test settings.";
+  const { subjectB, metric, percent, waitHours } = parsed.data;
+  await db
+    .update(posts)
+    .set({ subjectB, abMetric: metric, abTestPercent: percent, abWaitHours: waitHours })
+    .where(eq(posts.id, postId));
+  return null;
+}
+
+/** Ends an A/B test early with the writer's pick, and sends it to everyone else. */
+export async function pickAbWinner(postId: string, variant: "a" | "b"): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
+  if (!owned || owned.post.status !== "sending" || !owned.post.abMetric) {
+    return { ok: false, error: "There's no A/B test running on this post." };
+  }
+  if (variant !== "a" && variant !== "b") return { ok: false, error: "Pick A or B." };
+  const winner = await decideAbTest(postId, variant);
+  if (!winner) return { ok: false, error: "The test has already been decided." };
+  after(() =>
+    processDeliveries(postId).catch((e) => reportError("A/B send failed", e, { postId })),
+  );
+  refresh();
+  return { ok: true, message: `Sending subject ${winner.toUpperCase()} to everyone else…` };
+}
+
+/** People who got a sent post but haven't opened or clicked it (and are still subscribed). */
+async function nonOpeners(postId: string) {
+  const rows = await db.execute<{ n: number }>(sql`
+    select count(*)::int as n from ${deliveries} d
+    join subscribers s on s.id = d.subscriber_id
+    where d.post_id = ${postId} and d.status = 'sent'
+      and d.opened_at is null and d.clicked_at is null and s.status = 'active'
+  `);
+  return rows[0]?.n ?? 0;
+}
+
+/**
+ * Sends a sent post again, with a new subject line, to the people who didn't open it.
+ * Once per post. The resend is a hidden copy linked to the original (posts.resendOf),
+ * so its numbers are separate and "view in browser" opens the original.
+ */
+export async function resendToNonOpeners(postId: string, subject: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
+  if (!owned) return { ok: false, error: "Post not found." };
+  const { post, publication } = owned;
+  if (post.status !== "sent" || post.resendOf) {
+    return { ok: false, error: "Only a sent post can be resent." };
+  }
+  const cleanSubject = subject.trim().slice(0, 200);
+  if (!cleanSubject) return { ok: false, error: "Write a subject line for the resend." };
+  const [existing] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(eq(posts.resendOf, post.id))
+    .limit(1);
+  if (existing) return { ok: false, error: "This post has already been resent once." };
+  if ((await nonOpeners(post.id)) === 0) {
+    return { ok: false, error: "Everyone who got it has opened it (or left)." };
+  }
+
+  const [copy] = await db
+    .insert(posts)
+    .values({
+      publicationId: publication.id,
+      title: cleanSubject,
+      subtitle: post.subtitle,
+      slug: `resend-${randomToken()
+        .slice(0, 10)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "x")}`,
+      content: post.content,
+      contentFormat: post.contentFormat,
+      emailDesign: post.emailDesign,
+      sponsor: post.sponsor,
+      webHidden: true,
+      resendOf: post.id,
+    })
+    .returning({ id: posts.id });
+  const result = await queuePost(copy.id, publication.id);
+  if (result === null || "blocked" in result) {
+    await db.delete(posts).where(and(eq(posts.id, copy.id), eq(posts.status, "draft")));
+    return { ok: false, error: result ? result.blocked : "Couldn't start the resend." };
+  }
+  after(() =>
+    processDeliveries(copy.id).catch((e) => reportError("resend failed", e, { postId: copy.id })),
+  );
+  refresh();
+  return {
+    ok: true,
+    message: `Resending to ${result.queued.toLocaleString("en")} people who didn't open it…`,
+  };
+}
+
+/** Sets (or, with null, removes) the sponsor placement of a draft or scheduled post. */
+export async function setPostSponsor(
+  postId: string,
+  input: SponsorInput | null,
+): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (!owned) return { ok: false, error: "Post not found." };
+  if (owned.post.status !== "draft" && owned.post.status !== "scheduled") {
+    return { ok: false, error: "This post has already been sent." };
+  }
+  if (input === null) {
+    await db.update(posts).set({ sponsor: null }).where(eq(posts.id, owned.post.id));
+    return { ok: true, message: "Sponsor removed." };
+  }
+  const parsed = sponsorInput.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the sponsor." };
+  await db
+    .update(posts)
+    .set({
+      sponsor: parsed.data,
+      sponsorReportToken: owned.post.sponsorReportToken ?? randomToken(),
+    })
+    .where(eq(posts.id, owned.post.id));
+  return { ok: true, message: `Sponsor “${parsed.data.name}” added.` };
 }
 
 /** Restarts a send that stopped part-way (e.g. the server restarted). */
@@ -374,4 +592,32 @@ export async function resumeSend(postId: string): Promise<ActionResult> {
   after(() => processDeliveries(postId).catch((e) => reportError("resume failed", e, { postId })));
   refresh();
   return { ok: true, message: "Resumed." };
+}
+
+/** Delete a comment on one of this publication's posts. */
+export async function deleteComment(postId: string, commentId: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
+  if (!owned || !/^[0-9a-f-]{36}$/i.test(commentId)) return { ok: false, error: "Not found." };
+  await db
+    .delete(comments)
+    .where(and(eq(comments.id, commentId), eq(comments.postId, owned.post.id)));
+  refresh();
+  return { ok: true, message: "Comment deleted." };
+}
+
+/** Reply under a post as its author (shown with an "Author" badge). */
+export async function replyAsAuthor(postId: string, body: string): Promise<ActionResult> {
+  const owned = await getOwnedPost(postId);
+  if (owned && !isEditor(owned.role)) return { ok: false, error: EDITORS_ONLY };
+  if (!owned || owned.post.status !== "sent") return { ok: false, error: "Post not found." };
+  const error = await addAuthorComment(
+    owned.post.id,
+    owned.publication.fromName,
+    owned.user.email,
+    body,
+  );
+  if (error) return { ok: false, error };
+  refresh();
+  return { ok: true, message: "Reply posted." };
 }

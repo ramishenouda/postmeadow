@@ -28,23 +28,23 @@ async function run(fn: () => Promise<string | void>): Promise<BillingResult> {
 }
 
 export async function checkout(plan: unknown, interval: unknown): Promise<BillingResult> {
-  const { user } = await requirePublication();
+  const { user } = await requirePublication("owner");
   if (!isPaidPlan(plan) || !isInterval(interval)) return { ok: false, error: "Unknown plan." };
   return run(() => startCheckout(user, plan, interval));
 }
 
 export async function switchPlan(plan: unknown, interval: unknown): Promise<BillingResult> {
-  const { user } = await requirePublication();
+  const { user } = await requirePublication("owner");
   if (!isPaidPlan(plan) || !isInterval(interval)) return { ok: false, error: "Unknown plan." };
   return run(() => changePlan(user.id, plan, interval));
 }
 
 export async function updateStorageAddons(quantity: unknown): Promise<BillingResult> {
-  const { user } = await requirePublication();
+  const { user } = await requirePublication("owner");
   return run(() => setStorageAddons(user.id, Number(quantity)));
 }
 
 export async function manageBilling(): Promise<BillingResult> {
-  const { user } = await requirePublication();
+  const { user } = await requirePublication("owner");
   return run(() => portalUrl(user.id));
 }

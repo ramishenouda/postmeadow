@@ -39,7 +39,7 @@ export function EmbedSnippets({ origin, slug }: { origin: string; slug: string }
   );
 }
 
-function Snippet({ label, hint, code }: { label: string; hint: string; code: string }) {
+export function Snippet({ label, hint, code }: { label: string; hint: string; code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-2">

@@ -78,6 +78,62 @@
       "when": 1794187024474,
       "tag": "0010_launch_readiness",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794257365675,
+      "tag": "0011_smarter_sending",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794257929505,
+      "tag": "0012_readers",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794258369056,
+      "tag": "0013_growth",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794258924737,
+      "tag": "0014_automations",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794259291010,
+      "tag": "0015_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794259640809,
+      "tag": "0016_post_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794259942575,
+      "tag": "0017_custom_domains",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794260246900,
+      "tag": "0018_paid_subscriptions",
+      "breakpoints": true
     }
   ]
 }

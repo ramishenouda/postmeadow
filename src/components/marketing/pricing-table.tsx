@@ -16,6 +16,7 @@ import {
   type PlanId,
 } from "@/lib/plans";
 import { cn } from "@/lib/utils";
+import { FEE_PERCENT } from "@/lib/fees";
 
 /** What every plan includes. Plans differ in storage. */
 export const INCLUDED = [
@@ -23,7 +24,12 @@ export const INCLUDED = [
   "Rich-text editor with image uploads",
   "Branded emails and public archive",
   "Double opt-in and one-click unsubscribe",
-  "Open and click stats",
+  "Open and click stats, A/B subject tests",
+  "Automations and welcome series",
+  "Referrals, recommendations and landing pages",
+  "Comments, likes and reader preferences",
+  "Paid subscriptions (Stripe)",
+  "Import from Substack, Ghost and beehiiv",
   "RSS feed and social previews",
   "CSV import and export",
 ];
@@ -75,6 +81,13 @@ export function PricingTable() {
                 </Feature>
                 <Feature>{PLANS[id].emailsPerMonth.toLocaleString("en")} emails a month</Feature>
                 <Feature>{formatBytes(PLANS[id].storageBytes)} image storage</Feature>
+                <Feature>
+                  {PLANS[id].teammates} {PLANS[id].teammates === 1 ? "teammate" : "teammates"}
+                </Feature>
+                <Feature>{FEE_PERCENT[id]}% fee on paid subscriptions</Feature>
+                {PLANS[id].customDomains ? (
+                  <Feature>Your own domain and sending address</Feature>
+                ) : null}
                 {id !== "free" ? (
                   <Feature>
                     Add {formatBytes(STORAGE_ADDON_BYTES)} for{" "}

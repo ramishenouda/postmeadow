@@ -144,7 +144,10 @@ describe("public page and double opt-in", () => {
     const confirm = linkIn(message, "/api/subscriptions/confirm");
     const res = await new Client().fetch(confirm);
     assert.equal(res.status, 303);
-    assert.match(res.headers.get("location") ?? "", new RegExp(`/${SLUG}/subscribed$`));
+    assert.match(
+      res.headers.get("location") ?? "",
+      new RegExp(`/${SLUG}/subscribed\\?w=[\\w.-]+$`),
+    );
     assert.equal(await subscriberStatus("reader1@example.com"), "active");
     // Confirming sends the welcome email (in the background); wait so later tests start clean.
     await mail.waitFor("reader1@example.com", "Welcome to");

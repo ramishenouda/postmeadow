@@ -12,6 +12,8 @@ export type RenderablePost = {
   contentFormat: string;
   /** This post's own design; null or missing uses the publication's. */
   emailDesign?: string | null;
+  /** A sponsor placement (posts.sponsor); checked with readSponsor before use. */
+  sponsor?: unknown;
 };
 
 export type RenderablePublication = {
@@ -25,6 +27,8 @@ export type RenderablePublication = {
   fromName?: string | null;
   /** Shown in every footer. */
   postalAddress?: string | null;
+  /** Adds a "Refer a friend" link (to the reader's preferences page) to the footer. */
+  referralsEnabled?: boolean | null;
 };
 
 export type RenderUrls = {

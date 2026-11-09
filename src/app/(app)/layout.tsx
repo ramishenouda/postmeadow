@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Wordmark } from "@/components/marketing/site-chrome";
 import { APP_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
-import { getSession } from "@/lib/dal";
+import { getMembership, getSession } from "@/lib/dal";
 import { signOut } from "./actions";
 import { DashboardNav, NavLinks } from "./nav";
 
@@ -22,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {/* usePathname() is URL data, so it streams in; the fallback shows the same tabs. */}
         <Suspense fallback={<NavLinks />}>
-          <DashboardNav />
+          <RoleNav />
         </Suspense>
       </header>
       <main className="[&_h1]:font-display mx-auto w-full max-w-6xl flex-1 px-4 py-8">
@@ -30,6 +30,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </main>
     </div>
   );
+}
+
+/** Tabs for what the signed-in person may use on their publication. */
+async function RoleNav() {
+  const session = await getSession();
+  const membership = session ? await getMembership(session.user.id) : null;
+  return <DashboardNav role={membership?.role ?? "owner"} />;
 }
 
 async function UserMenu() {

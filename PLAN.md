@@ -102,16 +102,38 @@ pipeline only ever sees the finished HTML and text.
 - [x] **What every competitor has**: scheduled sends (with an in-process scheduler
       that also resumes interrupted sends), embeddable signup forms, SEO basics
       (sitemap, robots, canonical), editing/unpublishing sent posts, growth chart.
-- [ ] **Next competitive features**: custom domains per publication, importing posts
-      from Substack/beehiiv/Ghost, paid newsletters (Stripe Connect).
+- [x] **Smarter sending**: A/B subject tests (a sample gets A or B, the winner by opens or
+      clicks goes to everyone else after 1–24 hours, or when the writer picks), resending
+      once to people who didn't open (with a new subject), sponsor blocks with a shareable
+      results page (`/sponsor/{token}`).
+- [x] **Readers**: preferences page from every footer (pause 1–3 months, pick public
+      topics, unsubscribe), topic checkboxes on the sign-up form, likes (one per browser)
+      and comments (email-confirmed once, then remembered; author replies, moderation),
+      Stats page (sources, posts that brought readers, engagement levels with filters,
+      recent issues).
+- [x] **Growth**: referral program (personal links, rewards with emails to both sides,
+      leaderboard), recommendations (one-click subscribe after confirming), campaign
+      landing pages that tag sign-ups (`/{slug}/l/{page}`), website pop-up
+      (`/embed/{slug}/popup.js`).
+- [x] **Automations**: welcome series and tag-triggered sequences; each email is a post
+      (kind "automation") written in the normal editor; runs once per subscriber, resumable.
+- [x] **Teams**: owner, editors (everything but billing and the team) and contributors
+      (drafts only); invitations by email; seats per plan (1 / 5 / 25); bylines.
+- [x] **Imports**: Substack export ZIP, Ghost JSON, RSS/Atom (beehiiv, WordPress…) into the
+      archive with original dates (paid/members-only kept off the web) or as drafts;
+      re-imports skip what's there.
+- [x] **Custom domains** (Pro and Business): the publication on its own domain (proxy
+      rewrite + Caddy on-demand TLS) and sending from the writer's address (Resend Domains).
+- [x] **Paid newsletters**: Stripe Connect Express, monthly/yearly prices, Checkout with a
+      platform fee (10% / 5% / 3% by plan), paid posts with a free preview by email, web and
+      feed, emailed login links for paying readers, reader billing portal.
+- [ ] **Next**: copy imported images into our storage, Connect payouts reporting, comment
+      notifications for writers, a real job queue for very large lists.
 
 ## After the MVP
 
 - **Choice of email builders**: let users pick between builders, e.g. MJML,
   Maizzle, a drag-and-drop/block editor (Unlayer, GrapesJS) or raw HTML. This is
   supported by the `EmailRenderer` interface and `content_format` column.
-- Scheduled sends, and a real job queue for very large lists (sending currently
-  runs in `after()` inside the web process)
-- Open and click tracking, bounce and complaint webhooks
-- Paid subscriptions for readers (Stripe)
-- Multiple authors per publication, custom domains, RSS
+- A real job queue for very large lists (sending currently runs in `after()` and the
+  in-process scheduler)

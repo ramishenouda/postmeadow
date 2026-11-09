@@ -11,6 +11,8 @@ const body = z.object({
   content: z.string().max(200_000),
   /** The design picked in the editor; null for the publication's. */
   design: z.string().max(40).nullable().optional(),
+  /** The sponsor being edited; missing uses the saved one. */
+  sponsor: z.unknown().optional(),
 });
 
 /** Renders the editor's current (unsaved) content exactly as subscribers will get it. */
@@ -27,7 +29,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/post
 
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return new Response("Bad request", { status: 400 });
-  const { title, subtitle, slug, content, design } = parsed.data;
+  const { title, subtitle, slug, content, design, sponsor } = parsed.data;
 
   const { html } = await getEmailRenderer(post.contentFormat).render({
     post: {
@@ -36,6 +38,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/post
       content,
       contentFormat: post.contentFormat,
       emailDesign: design === undefined ? post.emailDesign : design,
+      sponsor: sponsor === undefined ? post.sponsor : sponsor,
     },
     publication,
     urls: {

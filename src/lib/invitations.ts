@@ -1,4 +1,5 @@
 import "server-only";
+import { senderAddress } from "@/lib/email/sender-domains";
 import { and, count, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { createElement } from "react";
 import { db } from "@/db";
@@ -214,7 +215,7 @@ export async function sendInvitations(
     );
     messages.push({
       to: email,
-      from: fromWithName(publication.name),
+      from: fromWithName(publication.name, senderAddress(publication)),
       replyTo: publication.replyTo ?? undefined,
       subject:
         publication.fromName === publication.name

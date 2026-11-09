@@ -40,10 +40,15 @@ import {
   saveAsTemplate,
   setPostAudience,
   setPostDesign,
+  setPostSponsor,
+  setPostPaid,
+  type AbTestInput,
   type PostInput,
 } from "../actions";
+import type { Sponsor } from "@/lib/sponsor-types";
 
 type Draft = { id: string; title: string; subtitle: string; slug: string; content: string };
+type Audience = "everyone" | "tags" | "paid";
 
 type SaveState =
   | { status: "saved"; at?: Date }
@@ -62,6 +67,7 @@ export function PostEditor({
   activeSubscribers,
   ownerEmail,
   mode = "draft",
+  backHref,
   scheduledAt = null,
   design: initialDesign = null,
   defaultDesign = "classic",
@@ -69,13 +75,25 @@ export function PostEditor({
   tags = [],
   audience: initialAudience = { mode: "everyone", tagIds: [] },
   recipients: initialRecipients = activeSubscribers,
+  sponsor: initialSponsor = null,
+  paidAvailable = false,
+  paid: initialPaid = false,
+  paidSubscribers = 0,
+  canSend = true,
+  abTest = null,
+  abMinRecipients = 100,
 }: {
   post: Draft;
   urlPrefix: string;
   activeSubscribers: number;
   ownerEmail: string;
-  /** "sent": editing the web version of a post that already went out. */
-  mode?: "draft" | "sent";
+  /**
+   * "sent": editing the web version of a post that already went out.
+   * "automation": an email in an automation (no sending, no web address).
+   */
+  mode?: "draft" | "sent" | "automation";
+  /** Where "back" goes in automation mode. */
+  backHref?: string;
   /** ISO time, when the post is scheduled. */
   scheduledAt?: string | null;
   /** This post's own email design; null uses the publication's (`defaultDesign`). */
@@ -85,12 +103,24 @@ export function PostEditor({
   sendError?: string | null;
   /** The publication's tags, with active subscribers per tag. */
   tags?: { id: string; name: string; active: number }[];
-  /** Who it goes to: everyone, or subscribers with any of these tags. */
-  audience?: { mode: "everyone" | "tags"; tagIds: string[] };
+  /** Who it goes to: everyone, subscribers with any of these tags, or paid subscribers. */
+  audience?: { mode: Audience; tagIds: string[] };
+  /** The publication takes payments: offer "paid post" and "paid subscribers only". */
+  paidAvailable?: boolean;
+  paid?: boolean;
+  paidSubscribers?: number;
   /** How many active subscribers that audience is right now. */
   recipients?: number;
+  /** The issue's sponsor placement, if any. */
+  sponsor?: Sponsor | null;
+  /** False for contributors: they write, an editor sends. */
+  canSend?: boolean;
+  /** The saved A/B subject test, if one is set up. */
+  abTest?: AbTestInput | null;
+  abMinRecipients?: number;
 }) {
   const sentMode = mode === "sent";
+  const automationMode = mode === "automation";
   const [title, setTitle] = useState(post.title);
   const [subtitle, setSubtitle] = useState(post.subtitle);
   const [slug, setSlug] = useState(post.slug);
@@ -106,7 +136,9 @@ export function PostEditor({
   const [design, setDesign] = useState<string | null>(initialDesign);
   const [audience, setAudience] = useState(initialAudience);
   const [recipients, setRecipients] = useState(initialRecipients);
-  const changeAudience = (next: { mode: "everyone" | "tags"; tagIds: string[] }) => {
+  const [sponsor, setSponsor] = useState<Sponsor | null>(initialSponsor);
+  const [paid, setPaid] = useState(initialPaid);
+  const changeAudience = (next: { mode: Audience; tagIds: string[] }) => {
     setAudience(next);
     startTransition(async () => {
       const result = await setPostAudience(post.id, next.mode, next.tagIds);
@@ -185,7 +217,7 @@ export function PostEditor({
         const res = await fetch(`/api/posts/${post.id}/preview`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, subtitle, slug, content, design }),
+          body: JSON.stringify({ title, subtitle, slug, content, design, sponsor }),
           signal: controller.signal,
         });
         if (res.ok) setPreviewHtml(await res.text());
@@ -197,7 +229,7 @@ export function PostEditor({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [tab, post.id, title, subtitle, slug, content, design]);
+  }, [tab, post.id, title, subtitle, slug, content, design, sponsor]);
 
   const run = (
     action: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>,
@@ -225,10 +257,16 @@ export function PostEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-sm">
           <Link
-            href={sentMode ? `/dashboard/posts/${post.id}` : "/dashboard/posts"}
+            href={
+              automationMode && backHref
+                ? backHref
+                : sentMode
+                  ? `/dashboard/posts/${post.id}`
+                  : "/dashboard/posts"
+            }
             className="text-muted-foreground hover:underline"
           >
-            {sentMode ? "← Back to stats" : "← Posts"}
+            {automationMode ? "← Automation" : sentMode ? "← Back to stats" : "← Posts"}
           </Link>
           <SaveIndicator state={save} />
         </div>
@@ -238,7 +276,12 @@ export function PostEditor({
             disabled={busy}
             onSave={(name) => run(() => saveAsTemplate(post.id, name))}
           />
-          {sentMode ? null : (
+          {automationMode ? (
+            <Button variant="outline" disabled={busy} onClick={() => run(() => sendTest(post.id))}>
+              Send test
+            </Button>
+          ) : null}
+          {sentMode || automationMode ? null : (
             <>
               <DeleteButton postId={post.id} disabled={busy} />
               <Button
@@ -248,24 +291,38 @@ export function PostEditor({
               >
                 Send test
               </Button>
-              <SendDialog
-                title={title}
-                activeSubscribers={activeSubscribers}
-                recipients={recipients}
-                tags={tags}
-                audience={audience}
-                onAudience={changeAudience}
-                scheduledAt={scheduledAt}
-                disabled={busy}
-                onSendNow={() => run(() => sendPost(post.id))}
-                onSchedule={(at) => run(() => schedulePost(post.id, at))}
-              />
+              {canSend ? (
+                <SendDialog
+                  title={title}
+                  activeSubscribers={activeSubscribers}
+                  recipients={recipients}
+                  tags={tags}
+                  audience={audience}
+                  onAudience={changeAudience}
+                  paidAvailable={paidAvailable}
+                  paidSubscribers={paidSubscribers}
+                  scheduledAt={scheduledAt}
+                  disabled={busy}
+                  abTest={abTest}
+                  abMinRecipients={abMinRecipients}
+                  onSendNow={(ab) => run(() => sendPost(post.id, ab))}
+                  onSchedule={(at, ab) => run(() => schedulePost(post.id, at, ab))}
+                />
+              ) : (
+                <span className="text-muted-foreground text-sm">An editor sends it</span>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {sentMode ? (
+      {automationMode ? (
+        <p className="bg-muted/40 rounded-lg border px-3 py-2 text-sm">
+          This email is part of an <strong>automation</strong>. The title is the subject line.
+          Changes apply to everyone who reaches this step from now on. It isn&apos;t published on
+          the web.
+        </p>
+      ) : sentMode ? (
         <p className="bg-muted/40 rounded-lg border px-3 py-2 text-sm">
           You&apos;re editing the <strong>web version</strong>. Emails that already went out
           don&apos;t change. Changes appear on your page as soon as they&apos;re saved.
@@ -357,6 +414,35 @@ export function PostEditor({
               </select>
             </label>
           )}
+          {paidAvailable && !sentMode && !automationMode ? (
+            <label className="text-muted-foreground flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={paid}
+                disabled={busy}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setPaid(next);
+                  run(() => setPostPaid(post.id, next));
+                }}
+              />
+              Paid post
+            </label>
+          ) : null}
+          {sentMode ? null : (
+            <SponsorDialog
+              sponsor={sponsor}
+              disabled={busy}
+              onSave={(next) =>
+                run(async () => {
+                  const result = await setPostSponsor(post.id, next);
+                  if (result.ok)
+                    setSponsor(next ? { ...next, cta: next.cta || "Learn more" } : null);
+                  return result;
+                })
+              }
+            />
+          )}
           {tab === "preview" ? (
             <div className="flex items-center gap-1" role="group" aria-label="Preview width">
               {(
@@ -388,7 +474,7 @@ export function PostEditor({
         <input
           value={title}
           onChange={(e) => onTitle(e.target.value)}
-          placeholder="Title"
+          placeholder={automationMode ? "Subject" : "Title"}
           aria-label="Title"
           maxLength={200}
           className="placeholder:text-muted-foreground/50 w-full bg-transparent text-4xl font-semibold tracking-tight outline-none"
@@ -401,7 +487,7 @@ export function PostEditor({
           maxLength={300}
           className="text-muted-foreground placeholder:text-muted-foreground/50 w-full bg-transparent text-xl outline-none"
         />
-        <div className="space-y-1">
+        <div className={cn("space-y-1", automationMode && "hidden")}>
           <div className="flex items-center gap-2">
             <Label htmlFor="slug" className="text-muted-foreground shrink-0 text-xs">
               Web address
@@ -508,8 +594,12 @@ function SendDialog({
   tags,
   audience,
   onAudience,
+  paidAvailable,
+  paidSubscribers,
   scheduledAt,
   disabled,
+  abTest,
+  abMinRecipients,
   onSendNow,
   onSchedule,
 }: {
@@ -517,14 +607,24 @@ function SendDialog({
   activeSubscribers: number;
   recipients: number;
   tags: { id: string; name: string; active: number }[];
-  audience: { mode: "everyone" | "tags"; tagIds: string[] };
-  onAudience: (next: { mode: "everyone" | "tags"; tagIds: string[] }) => void;
+  audience: { mode: Audience; tagIds: string[] };
+  onAudience: (next: { mode: Audience; tagIds: string[] }) => void;
+  paidAvailable: boolean;
+  paidSubscribers: number;
   scheduledAt: string | null;
   disabled: boolean;
-  onSendNow: () => void;
-  onSchedule: (isoTime: string) => void;
+  abTest: AbTestInput | null;
+  abMinRecipients: number;
+  onSendNow: (ab: AbTestInput | null) => void;
+  onSchedule: (isoTime: string, ab: AbTestInput | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [abOn, setAbOn] = useState(Boolean(abTest));
+  const [ab, setAb] = useState<AbTestInput>(
+    abTest ?? { subjectB: "", metric: "opens", percent: 20, waitHours: 4 },
+  );
+  const abTooSmall = recipients < abMinRecipients;
+  const abActive = abOn && !abTooSmall;
   const [when, setWhen] = useState<"now" | "later">(scheduledAt ? "later" : "now");
   const [at, setAt] = useState(() => defaultScheduleTime(scheduledAt));
   const count = (n: number) =>
@@ -550,8 +650,9 @@ function SendDialog({
             e.preventDefault();
             setOpen(false);
             // The input is local time; the browser converts it to an exact moment.
-            if (when === "later") onSchedule(new Date(at).toISOString());
-            else onSendNow();
+            const test = abActive ? ab : null;
+            if (when === "later") onSchedule(new Date(at).toISOString(), test);
+            else onSendNow(test);
           }}
         >
           <DialogHeader>
@@ -585,6 +686,17 @@ function SendDialog({
                 <span className="text-muted-foreground text-xs">(tag subscribers first)</span>
               ) : null}
             </label>
+            {paidAvailable ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={audience.mode === "paid"}
+                  onChange={() => onAudience({ mode: "paid", tagIds: [] })}
+                />
+                Paid subscribers only ({count(paidSubscribers)})
+              </label>
+            ) : null}
             {audience.mode === "tags" ? (
               <div className="flex flex-wrap gap-1.5 pl-6">
                 {tags.map((t) => {
@@ -604,6 +716,88 @@ function SendDialog({
                     </button>
                   );
                 })}
+              </div>
+            ) : null}
+          </fieldset>
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium">Subject line</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={abOn}
+                disabled={abTooSmall}
+                onChange={(e) => setAbOn(e.target.checked)}
+              />
+              A/B test a second subject line
+              {abTooSmall ? (
+                <span className="text-muted-foreground text-xs">
+                  (needs {abMinRecipients}+ recipients)
+                </span>
+              ) : null}
+            </label>
+            {abActive ? (
+              <div className="space-y-3 pl-6">
+                <div className="space-y-1 text-sm">
+                  <p className="text-muted-foreground text-xs">
+                    A: <span className="text-foreground">{title || "Untitled"}</span>
+                  </p>
+                  <Input
+                    value={ab.subjectB}
+                    onChange={(e) => setAb({ ...ab, subjectB: e.target.value })}
+                    placeholder="B: another subject line"
+                    aria-label="Subject B"
+                    maxLength={200}
+                    required
+                  />
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    Test on
+                    <select
+                      value={ab.percent}
+                      onChange={(e) => setAb({ ...ab, percent: Number(e.target.value) })}
+                      className="bg-background h-8 rounded-md border px-2"
+                    >
+                      {[10, 20, 30, 50].map((p) => (
+                        <option key={p} value={p}>
+                          {p}%
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Winner by
+                    <select
+                      value={ab.metric}
+                      onChange={(e) =>
+                        setAb({ ...ab, metric: e.target.value as AbTestInput["metric"] })
+                      }
+                      className="bg-background h-8 rounded-md border px-2"
+                    >
+                      <option value="opens">Opens</option>
+                      <option value="clicks">Clicks</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    after
+                    <select
+                      value={ab.waitHours}
+                      onChange={(e) => setAb({ ...ab, waitHours: Number(e.target.value) })}
+                      className="bg-background h-8 rounded-md border px-2"
+                    >
+                      {[1, 2, 4, 8, 24].map((h) => (
+                        <option key={h} value={h}>
+                          {h} {h === 1 ? "hour" : "hours"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {Math.floor((recipients * ab.percent) / 200).toLocaleString("en")} people get A
+                  and as many get B. After {ab.waitHours} {ab.waitHours === 1 ? "hour" : "hours"}{" "}
+                  the subject with more {ab.metric} goes to everyone else.
+                </p>
               </div>
             ) : null}
           </fieldset>
@@ -646,8 +840,137 @@ function SendDialog({
           </fieldset>
           <DialogFooter>
             <Button type="submit" disabled={recipients === 0}>
-              {when === "now" ? `Send to ${people}` : "Schedule"}
+              {when === "later" ? "Schedule" : abActive ? "Start A/B test" : `Send to ${people}`}
             </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Add, change or remove the issue's sponsor placement. */
+function SponsorDialog({
+  sponsor,
+  disabled,
+  onSave,
+}: {
+  sponsor: Sponsor | null;
+  disabled: boolean;
+  onSave: (next: Sponsor | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="outline" size="sm" disabled={disabled}>
+            {sponsor ? `Sponsor: ${sponsor.name}` : "Add sponsor"}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const get = (k: string) => String(f.get(k) ?? "").trim();
+            setOpen(false);
+            onSave({
+              name: get("name"),
+              text: get("text"),
+              url: get("url"),
+              cta: get("cta"),
+              imageUrl: get("imageUrl") || null,
+              position: get("position") === "bottom" ? "bottom" : "top",
+            });
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Sponsor</DialogTitle>
+            <DialogDescription>
+              A clearly labelled block at the top or bottom of this issue. Afterwards you get a
+              results page to share with the sponsor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="sp-name">Sponsor name</Label>
+            <Input id="sp-name" name="name" defaultValue={sponsor?.name} required maxLength={80} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sp-text">What to say</Label>
+            <textarea
+              id="sp-text"
+              name="text"
+              defaultValue={sponsor?.text}
+              required
+              maxLength={400}
+              rows={3}
+              className="bg-background focus-visible:ring-ring/50 w-full rounded-lg border px-2.5 py-2 text-sm outline-none focus-visible:ring-3"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+            <div className="space-y-1.5">
+              <Label htmlFor="sp-url">Link</Label>
+              <Input
+                id="sp-url"
+                name="url"
+                type="url"
+                defaultValue={sponsor?.url}
+                placeholder="https://"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sp-cta">Button text</Label>
+              <Input
+                id="sp-cta"
+                name="cta"
+                defaultValue={sponsor?.cta}
+                placeholder="Learn more"
+                maxLength={40}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sp-image">Image address (optional)</Label>
+            <Input
+              id="sp-image"
+              name="imageUrl"
+              type="url"
+              defaultValue={sponsor?.imageUrl ?? ""}
+              placeholder="https://…/logo.png"
+            />
+          </div>
+          <fieldset className="flex gap-4 text-sm">
+            <legend className="sr-only">Position</legend>
+            {(["top", "bottom"] as const).map((p) => (
+              <label key={p} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="position"
+                  value={p}
+                  defaultChecked={(sponsor?.position ?? "top") === p}
+                />
+                {p === "top" ? "Top of the issue" : "Bottom of the issue"}
+              </label>
+            ))}
+          </fieldset>
+          <DialogFooter className="gap-2">
+            {sponsor ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setOpen(false);
+                  onSave(null);
+                }}
+              >
+                Remove sponsor
+              </Button>
+            ) : null}
+            <Button type="submit">Save sponsor</Button>
           </DialogFooter>
         </form>
       </DialogContent>

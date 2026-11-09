@@ -11,7 +11,7 @@ import { monthlyEmailLimit, PLANS, isPlanId, subscriberLimit } from "@/lib/plans
  * gate every send goes through ("Send now" and scheduled sends).
  */
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
 
 export const usageMonth = (d = new Date()) => d.toISOString().slice(0, 7);
 

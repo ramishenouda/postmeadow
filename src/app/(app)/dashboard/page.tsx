@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { and, count, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import { DeniedNotice } from "./denied-notice";
+import { and, count, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { StatusBadge } from "@/components/status-badge";
 import { SubscriberChart } from "@/components/subscriber-chart";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,9 +20,14 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<DashboardSkeleton />}>
-      <Dashboard />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <DeniedNotice />
+      </Suspense>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <Dashboard />
+      </Suspense>
+    </>
   );
 }
 
@@ -43,7 +49,13 @@ async function Dashboard() {
     db
       .select({ n: count() })
       .from(posts)
-      .where(and(eq(posts.publicationId, publication.id), eq(posts.status, "sent"))),
+      .where(
+        and(
+          eq(posts.publicationId, publication.id),
+          eq(posts.status, "sent"),
+          isNull(posts.resendOf),
+        ),
+      ),
     db
       .select({
         id: posts.id,
@@ -55,7 +67,13 @@ async function Dashboard() {
         delivered: sql<number>`(select count(*)::int from ${deliveries} d where d.post_id = posts.id and d.status = 'sent')`,
       })
       .from(posts)
-      .where(eq(posts.publicationId, publication.id))
+      .where(
+        and(
+          eq(posts.publicationId, publication.id),
+          isNull(posts.resendOf),
+          eq(posts.kind, "issue"),
+        ),
+      )
       .orderBy(desc(posts.updatedAt))
       .limit(5),
     subscriberGrowth(publication.id, 30),

@@ -26,7 +26,7 @@ export default function BillingPage({ searchParams }: Props) {
 }
 
 async function Billing({ searchParams }: Pick<Props, "searchParams">) {
-  const { user } = await requirePublication();
+  const { user } = await requirePublication("owner");
   const [billing, usage, sending, params] = await Promise.all([
     getBilling(user.id),
     storageUsage(user.id),

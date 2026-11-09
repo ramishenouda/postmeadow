@@ -1,4 +1,6 @@
 import "server-only";
+import { senderAddress } from "@/lib/email/sender-domains";
+import { liveDomain } from "@/lib/domains";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { publications, subscribers } from "@/db/schema";
@@ -33,14 +35,15 @@ export async function sendWelcomeEmail(subscriberId: string): Promise<boolean> {
     <NewsletterEmail
       design={design}
       publicationName={publication.name}
-      publicationUrl={publicationUrl(publication.slug)}
+      publicationUrl={publicationUrl(publication.slug, liveDomain(publication))}
       title={`Welcome to ${publication.name}`}
       subtitle={publication.description}
       preview={`Welcome to ${publication.name}`}
-      webUrl={publicationUrl(publication.slug)}
+      webUrl={publicationUrl(publication.slug, liveDomain(publication))}
       unsubscribeUrl={unsubscribeUrl}
       senderName={publication.fromName}
       postalAddress={publication.postalAddress}
+      referUrl={publication.referralsEnabled ? `${unsubscribeUrl}#refer` : null}
       brand={{ logoUrl: publication.logoUrl, accent, fontStyle: publication.fontStyle }}
     >
       {renderMarkdownTree(
@@ -52,7 +55,7 @@ export async function sendWelcomeEmail(subscriberId: string): Promise<boolean> {
 
   await sendEmail({
     to: subscriber.email,
-    from: fromWithName(publication.fromName),
+    from: fromWithName(publication.fromName, senderAddress(publication)),
     replyTo: publication.replyTo ?? undefined,
     subject: `Welcome to ${publication.name}`,
     html,
